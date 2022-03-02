@@ -1,0 +1,12 @@
+.vagrant
+*.iso
+*.log
+user-data
+
+# session
+Session.vim
+# temporary
+.netrwhist
+*~
+# auto-generated tag files
+tags
