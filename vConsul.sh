@@ -1,7 +1,7 @@
 #!/bin/bash
 
 Cluster=('bootstrap' 'consul-01' 'consul-02' 'consul-03' 'client-01' 'client-02')
-ClusterRev=('client-01' 'client-02' 'consul-01' 'consul-02' 'consul-03' 'bootstrap')
+ClusterRev=('client-02' 'client-01' 'consul-03' 'consul-02' 'consul-01' 'bootstrap')
 ConsulServers=('consul-01' 'consul-02' 'consul-03')
 ConsulClients=('client-01' 'client-02')
 
@@ -75,6 +75,11 @@ elif [[ $1 == "-reprovision" ]];then
   done
   echo "Cluster Re-provisioning complete!"
 
+elif [[ $1 == "-destroy" ]];then
+  for i in "${ClusterRev[@]}"; do
+    vagrantDestroy $i
+  done
+
 else
-  echo "Invalid script argument passed! Enter: '-init', '-start', '-stop', or '-reprovision'"
+  echo "Invalid script argument passed! Enter: '-init', '-start', '-stop', '-destroy' or '-reprovision'"
 fi

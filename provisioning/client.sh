@@ -25,6 +25,7 @@ if [ -f "/usr/local/bin/consul" ]; then
   rm -rf "/usr/local/bin/consul"
 fi
 
+# Retrieve and unzip(install) Consul Service binary
 cd /usr/local/bin
 wget -q https://releases.hashicorp.com/consul/1.11.4/consul_1.11.4_linux_amd64.zip
 unzip *.zip
@@ -38,6 +39,7 @@ else
   mkdir -p /etc/consul.d
 fi
 
+# Step 6 - Make Consule Data Directory
 if [ -d "/var/consul" ]
 then
   rm -rf /var/consul && mkdir /var/consul
@@ -45,14 +47,14 @@ else
   mkdir /var/consul
 fi
 
+# Step 7 - Retrieve Consul Genkey for encrypted comms
 Key=""
-
 if [[ -f $EPath ]]; then
   Key=$( cat ${EPath} )
 else
   echo "Consul DataCenter Key not found at ${EPath}. Ensure DC Bootstrap installation was successful..."
 fi
 
-# Step 6 - Copy the server configuration.
+# Step 8 - Update and create the server configuration JSON.
 ConsulIP=$( ip addr show eth1 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1 )
 cat $1 | jq ".bind_addr |= \"$ConsulIP\"" | jq ".client_addr |= \"$ConsulIP\"" | jq ".advertise_addr |= \"$ConsulIP\"" | jq ".encrypt |= \"$Key\"" > /etc/consul.d/config.json

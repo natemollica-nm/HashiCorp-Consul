@@ -2,8 +2,6 @@
  
 # Step 1 - Clean Apt Repository directories and update source list.
 rm -rf /var/lib/apt/lists/*
-# rm -f /etc/apt/sources.list
-# cp /vagrant/linux_locals/sources.list /etc/apt/
 
 # Step 2 - Get the necessary utilities and install them.
 apt-get update && apt-get -y upgrade && apt-get clean
@@ -25,10 +23,16 @@ if [ -f "/usr/local/bin/consul" ]; then
   rm -rf "/usr/local/bin/consul"
 fi
 
+# Retrieve and unzip(install) Consul Service binary
 cd /usr/local/bin
 wget -q https://releases.hashicorp.com/consul/1.11.4/consul_1.11.4_linux_amd64.zip
 unzip *.zip
 rm *.zip
+
+# Consul Server Envoy side-car proxy service binary install
+curl -L https://func-e.io/install.sh | bash -s -- -b /usr/local/bin
+func-e use 1.18.3
+sudo cp ~/.func-e/versions/1.18.3/bin/envoy /usr/local/bin/
  
 # Step 5 - Make the Consul directory.
 if [ -d "/etc/consul.d" ]
@@ -38,6 +42,7 @@ else
   mkdir -p /etc/consul.d
 fi
 
+# Step 6 - Make Consule Data Directory
 if [ -d "/var/consul" ]
 then
   rm -rf /var/consul && mkdir /var/consul
@@ -45,6 +50,7 @@ else
   mkdir /var/consul
 fi
 
+# Step 7 - Generate Consul Genkey for Encrypted Comms
 if [[ ($HOSTNAME -eq "bootstrap") && (! -f $EPath) ]]; then
   touch $EPath
   consul keygen > $EPath
@@ -52,6 +58,6 @@ fi
 
 Key=$( cat ${EPath} )
 
-# Step 6 - Update local config.json file for server specific info.
+# Step 8 - Update local config.json file for server specific info.
 ConsulIP=$( ip addr show eth1 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1 )
 cat $1 | jq ".bind_addr |= \"$ConsulIP\"" | jq ".client_addr |= \"$ConsulIP\"" | jq ".advertise_addr |= \"$ConsulIP\"" | jq ".encrypt |= \"$Key\"" > /etc/consul.d/config.json
