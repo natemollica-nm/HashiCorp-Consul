@@ -38,7 +38,7 @@ function vagrantProvision {
   echo "$1 Re-provisioning started!"
 }
 
-if [[ $1 == "-reinit" ]];then
+if [[ $1 == "-init" ]];then
   echo "Re-Initializing Consul Cluster!"
 
   # BEGIN: Agent Kill
@@ -76,5 +76,5 @@ elif [[ $1 == "-reprovision" ]];then
   echo "Cluster Re-provisioning complete!"
 
 else
-  echo "Invalid script argument passed! Enter: '-reinit', '-start', '-stop', or '-reprovision'"
+  echo "Invalid script argument passed! Enter: '-init', '-start', '-stop', or '-reprovision'"
 fi
