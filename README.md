@@ -24,6 +24,19 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
 ### Cluster Creation
 
 ```
+# vConsul.sh Bash Script to perform Vagrant Provisioning, Startup, and Shutdown functions of Consul Cluster
+# Initially build or rebuild Consul Cluster
+ ./vConsul.sh -init
+
+# Reload/Startup Consul Cluster Members
+ ./vConsul.sh -start
+
+# Shutdown Consul Cluster Members
+ ./vConsul.sh -stop
+ 
+# Re-provision Consul Cluster Members
+ ./vConsul.sh -reprovision
+
 # Create the first Consul server to bootstrap the Consul cluster
 vagrant up bootstrap
 
