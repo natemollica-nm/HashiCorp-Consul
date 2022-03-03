@@ -33,10 +33,11 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
 
 # Shutdown Consul Cluster Members
  ./vConsul.sh -stop
- 
+
 # Re-provision Consul Cluster Members
  ./vConsul.sh -reprovision
 
+#### vConsul.sh provisioning process
 # Create the first Consul server to bootstrap the Consul cluster
 vagrant up bootstrap
 
