@@ -13,7 +13,7 @@ A 3-Node [Consul][a01] cluster (variant of [vagrant-consul-cluster][a16]) with 2
 The `Vagrantfile` is set up to create 6 hosts of various types as described below.
 
 | Hostname | Description | Note | 
-|----------|-------------|
+|----------|-------------|------|
 | `bootstrap` | This is the first Consul server that is started in bootstrap mode to expect 2 more Consul servers to join the server cluster.  Its sole purpose is to bootstrap the Consul cluster, after which it can be destroyed.The Consul start-up command is hard-coded to [bootstrap][a08] the Consul cluster, while the rest of the 3-node Consul servers are told to [join][a09] an agent in an existing Consul cluster. | Since the bootstrap server is hard-coded to bootstrap, it has outlived its function after the bootstrap process unless its hard-coded command is updated.  However, since I try to build only [immutable infrastructure][a10], updating the command on the bootstrap host would be less than ideal, so I just destroy it instead since the rest of the servers are already bootstrapped, and can come and go without the operations of the cluster getting impacted as long as we maintain a quorum online. |
 | `consul-0[1-3]` | This is a 3-node Consul server cluster that is bootstrapped by the bootstrap host, and has quorum as a Consul cluster even after the `bootstrap` host is destroyed. | -- |
 | `compute-0[1-2]` | A 2-node compute cluster, each running a Consul client, Docker and [Registrator][a06] to update the location of services running on them. | -- |
