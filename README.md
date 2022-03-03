@@ -66,6 +66,7 @@ vagrant destroy bootstrap -f
 1. [Sreenivas Makam's Blog: Service Discovery with Consul][a07]
 1. [Setting up a Consul cluster for testing and development with Vagrant (Part 2)][a16]
 1. [AWS Quick Starts: HashiCorp Consul on AWS][a15]
+1. [Vagrant Consul Cluster GitHub Repo: vagrant-consul-cluster][a16]
 
 [a01]: https://www.consul.io/
 [a02]: http://www.wickedawesometech.us/2016/04/setting-up-consul-service-discovery-in.html
