@@ -11,13 +11,14 @@ def create_vm config, host, prov_script, scrpt_args
     # Using HashiCorps Bionic64 Base VB Image
     config.vm.box = "hashicorp/bionic64"
 
-    config.vm.provision "shell" do |s|
+    config.vm.provision "shell", run: "once" do |s|
         s.path = prov_script
         s.args = [scrpt_args]
     end
 
-    config.vm.provision "shell",
-        inline: "exec consul agent -config-file=/etc/consul.d/config.json -client '{{ GetPrivateInterfaces | exclude \"type\" \"ipv6\" | join \"address\" \" \" }}' -advertise=#{host["ip"]} -bind '{{ GetInterfaceIP \"eth1\" }}' -data-dir=\"var/consul\" -dev -node ${HOSTNAME}"
+    config.vm.provision "shell" do |s|
+        s.inline = "consul agent -config-file=/etc/consul.d/config.json -dev -node ${HOSTNAME}"
+    end
 end
 
 Vagrant.configure(2) do |config|
@@ -36,7 +37,7 @@ Vagrant.configure(2) do |config|
         end
     end
 
-    # Consul Server Cluster (Non-Bootstraps) .11-.13 IPs
+    # Consul Server Cluster (Consul-0[1..3]) (Non-Bootstraps) .11-.13 IPs
     (1..3).each do |id|
         base_ip = 10
         host = {
@@ -50,7 +51,7 @@ Vagrant.configure(2) do |config|
         end
     end
 
-    # Consul Clients .21-.22 IP
+    # Consul Clients (Client-01/02) .21-.22 IP
     (1..2).each do |id|
         base_ip = 20
         host = {

@@ -5,7 +5,12 @@
     "data_dir": "/var/consul",
     "log_level": "INFO",
     "enable_syslog": true,
-    "start_join": ["192.168.56.10"],
+    "enable_debug": true,
+    "encrypt": "",
+    "bind_addr": "",
+    "client_addr": "",
+    "advertise_addr": "",
+    "start_join": ["192.168.56.10", "192.168.56.11", "192.168.56.12", "192.168.56.13"],
     "ui_config": {
         "enabled": true
     }
