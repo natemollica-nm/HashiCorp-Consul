@@ -13,4 +13,4 @@ tags
 # Consul DC Encryption Key
 configs/key
 # .DS_Store
-.DS_Store
+*.DS_Store
