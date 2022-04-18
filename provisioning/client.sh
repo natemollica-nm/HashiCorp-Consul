@@ -11,8 +11,8 @@ apt-get install -y unzip
 JQExe="/vagrant/linux_locals/jq_executable/jq"
 EPath="/vagrant/configs/key"
  
-# Step 3 - Copy the upstart script to the /etc/init folder.
-cp /vagrant/configs/consul.conf /etc/init/consul.conf
+# Step 3 - Copy Ubuntu Consul service file to /etc/systemd/system
+cp /vagrant/configs/consul.service /etc/systemd/system/consul.service
  
 # Step 4 - Get the Consul Zip file and extract it.  
 if [ -f "/usr/local/bin/jq" ]; then

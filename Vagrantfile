@@ -16,8 +16,8 @@ def create_vm config, host, prov_script, scrpt_args
         s.args = [scrpt_args]
     end
 
-    config.vm.provision "shell" do |s|
-        s.inline = "consul agent -config-file=/etc/consul.d/config.json -dev -node ${HOSTNAME}"
+    config.vm.provision "shell", run: "once" do |s|
+        s.path = "./provisioning/consul.sh"
     end
 end
 

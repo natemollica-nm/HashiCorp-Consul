@@ -7,7 +7,12 @@ ConsulClients=('client-01' 'client-02')
 
 function consulAgentKill {
   echo "Terminating Consul Agent - $1"
-  vagrant ssh $1 -c 'consul_pid=$( pidof consul ) && sudo kill -INT $consul_pid'
+  vagrant ssh $1 -c 'sudo service consul stop'
+}
+
+function startAgent {
+  echo "Starting Consul Agent - $1"
+  vagrant ssh $1 -c 'sudo service consul start'
 }
 
 function vagrantDestroy {
@@ -19,64 +24,41 @@ function vagrantDestroy {
   done
 }
 
-function vagrantUp {
-  vagrant up $1 &
-  # Give the provisioning process time to lead/finish.
-  sleep 5
-  echo "$1 Startup started!"
-}
-
 function vagrantHalt {
   echo "Stopping $1"
   vagrant halt $1
 }
 
-function vagrantProvision {
-  vagrant up $1  --provision &
-  # Give the provisioning process time to lead/finish.
-  sleep 5
-  echo "$1 Re-provisioning started!"
+function vagrantUp {
+    vagrant up $1 &
+    sleep 5
+    echo "$1 Provisioning started..."
 }
 
 if [[ $1 == "-init" ]];then
   echo "Re-Initializing Consul Cluster!"
 
-  # BEGIN: Agent Kill
-  for i in "${ClusterRev[@]}"; do 
-    consulAgentKill $i
-  done
-
-  # BEGIN: Destroy and Rebuild
-  echo "Destroying and Re-Provisioning Consul Cluster..."
-  for i in "${Cluster[@]}"; do
-    vagrantDestroy $i
-    vagrantUp $i
-  done
-  echo "Consul Cluster Re-Initialized!"
-
-elif [[ $1 == "-start" ]];then
+  # BEGIN: Consul Cluster Init
+  echo "Provisioning Consul Cluster..."
   for i in "${Cluster[@]}"; do
     vagrantUp $i
   done
-  echo "Consul Cluster startup complete!"
+  echo "Consul Cluster Initialized!"
 
 elif [[ $1 == "-stop" ]];then
-  for i in "${ClusterRev[@]}"; do 
+  $Cluster = $ClusterRev
+  for i in "${Cluster[@]}"; do 
     consulAgentKill $i
   done
-  for i in "${ClusterRev[@]}"; do
+  for i in "${Cluster[@]}"; do
     vagrantHalt $i
   done
   echo "Cluster Shutdown Complete!"
 
-elif [[ $1 == "-reprovision" ]];then
-  for i in "${Cluster[@]}"; do
-    vagrantProvision $i
-  done
-  echo "Cluster Re-provisioning complete!"
-
 elif [[ $1 == "-destroy" ]];then
-  for i in "${ClusterRev[@]}"; do
+  $Cluster = $ClusterRev
+  for i in "${Cluster[@]}"; do
+    consulAgentKill $i
     vagrantDestroy $i
   done
 
