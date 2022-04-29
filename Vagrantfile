@@ -1,67 +1,53 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-def create_vm config, host, prov_script, scrpt_args
-    # VB Hostname
-    config.vm.hostname = host["hostname"]
+VAGRANTFILE_API_VERSION = "2"
 
-    # VB Host IP
-    config.vm.network :private_network, ip: host["ip"]
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
-    # Using HashiCorps Bionic64 Base VB Image
-    config.vm.box = "hashicorp/bionic64"
+  config.vm.box = "hashicorp/bionic64"
 
-    config.vm.provision "shell", run: "once" do |s|
-        s.path = prov_script
-        s.args = [scrpt_args]
+    config.vm.define "consul-server-1" do |consul1|
+        consul1.vm.provision "shell", path: "prov/provision.sh", run: "once"
+        consul1.vm.hostname = "consul-server-1"
+        consul1.vm.network "private_network", ip: "192.168.56.10"
     end
 
-    config.vm.provision "shell", run: "once" do |s|
-        s.path = "./provisioning/consul.sh"
-    end
-end
-
-Vagrant.configure(2) do |config|
-
-    # Consul Bootstrap Server Node .10 IP
-    [
-        {
-            "hostname" => "bootstrap",
-            "ip" => "192.168.56.10",
-        }
-    ].each do |host|
-        config.vm.define host["hostname"] do |config|
-            config_script = "./provisioning/server.sh"
-            node_config = "/vagrant/configs/node_configs/bootstrap_config.json"
-            create_vm(config, host, config_script, node_config)
-        end
+    config.vm.define "consul-server-2" do |consul2|
+        consul2.vm.provision "shell", path: "prov/provision.sh", run: "once"
+        consul2.vm.hostname = "consul-server-2"
+        consul2.vm.network "private_network", ip: "192.168.56.20"
     end
 
-    # Consul Server Cluster (Consul-0[1..3]) (Non-Bootstraps) .11-.13 IPs
-    (1..3).each do |id|
-        base_ip = 10
-        host = {
-            "hostname" => "consul-%02d" % [id],
-            "ip" => "192.168.56.%d" % [base_ip + id],
-        }
-        config.vm.define host["hostname"] do |config|
-            config_script = "./provisioning/server.sh"
-            node_config = "/vagrant/configs/node_configs/consul_srv_config.json"
-            create_vm(config, host, config_script, node_config)
-        end
+    config.vm.define "consul-server-3" do |consul3|
+        consul3.vm.provision "shell", path: "prov/provision.sh", run: "once"
+        consul3.vm.hostname = "consul-server-3"
+        consul3.vm.network "private_network", ip: "192.168.56.30"
     end
 
-    # Consul Clients (Client-01/02) .21-.22 IP
-    (1..2).each do |id|
-        base_ip = 20
-        host = {
-            "hostname" => "client-%02d" % [id],
-            "ip" => "192.168.56.%d" % [base_ip + id],
-        }
-        config.vm.define host["hostname"] do |config|
-            config_script = "./provisioning/client.sh"
-            node_config = "/vagrant/configs/node_configs/consul_clnt_config.json"
-            create_vm(config, host, config_script, node_config)
-        end
+    config.vm.define "consul-server-4" do |consul4|
+        consul4.vm.provision "shell", path: "prov/provision.sh", run: "once"
+        consul4.vm.hostname = "consul-server-4"
+        consul4.vm.network "private_network", ip: "192.168.56.40"
     end
-end
+
+    config.vm.define "consul-server-5" do |consul5|
+        consul5.vm.provision "shell", path: "prov/provision.sh", run: "once"
+        consul5.vm.hostname = "consul-server-5"
+        consul5.vm.network "private_network", ip: "192.168.56.50"
+    end
+
+    config.vm.define "consul-server-6" do |consul6|
+        consul6.vm.provision "shell", path: "prov/provision.sh", run: "once"
+        consul6.vm.hostname = "consul-server-6"
+        consul6.vm.network "private_network", ip: "192.168.56.60"
+    end
+
+    config.vm.define "consul-client-1" do |client1|
+        client1.vm.provision "shell", path: "prov/provisionclient.sh", run: "once"
+        client1.vm.hostname = "consul-client-1"
+        client1.vm.network "private_network", ip: "192.168.56.70"
+        client1.vm.network "forwarded_port", guest: 8500, host: 8500, protocol: "tcp"
+    end
+
+ end

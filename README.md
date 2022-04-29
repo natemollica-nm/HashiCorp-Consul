@@ -1,6 +1,6 @@
 # Vagrant Consul Cluster
 
-A 3-Node [Consul][a01] cluster (variant of [vagrant-consul-cluster][a16]) with 2-node compute client resources to run services on to demonstrate how Consul works, and to learn about how it operates.
+A 6-Node [Consul][a01] cluster ( variant of [vagrant-consul-cluster][a16] ) with 2-node compute client resources to run services on to demonstrate how Consul works, and to learn about how it operates.
 
 ## Prerequisites
 
@@ -12,11 +12,10 @@ A 3-Node [Consul][a01] cluster (variant of [vagrant-consul-cluster][a16]) with 2
 
 The `Vagrantfile` is set up to create 6 hosts of various types as described below.
 
-| Hostname | Description | Note | 
-|----------|-------------|------|
-| `bootstrap` | This is the first Consul server that is started in bootstrap mode to expect 2 more Consul servers to join the server cluster.  Its sole purpose is to bootstrap the Consul cluster, after which it can be destroyed.The Consul start-up command is hard-coded to [bootstrap][a08] the Consul cluster, while the rest of the 3-node Consul servers are told to [join][a09] an agent in an existing Consul cluster. | *Since the bootstrap server is hard-coded to bootstrap, it has outlived its function after the bootstrap process unless its hard-coded command is updated.  However, since I try to build only [immutable infrastructure][a10], updating the command on the bootstrap host would be less than ideal, so I just destroy it instead since the rest of the servers are already bootstrapped, and can come and go without the operations of the cluster getting impacted as long as we maintain a quorum online.* |
-| `consul-0[1-3]` | This is a 3-node Consul server cluster that is bootstrapped by the bootstrap host, and has quorum as a Consul cluster even after the `bootstrap` host is destroyed. | -- |
-| `compute-0[1-2]` | A 2-node compute cluster, each running a Consul client, Docker and [Registrator][a06] to update the location of services running on them. | -- |
+|     <font size="4"> HostName </font>      | <font size="4"> Description </font>                                                                                                                                |
+|:-----------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| <font size="2.5"> consul-server-x </font> | This is a 6-node Consul server cluster that is bootstrapped by the bootstrap host, and has quorum as a Consul cluster even after the `bootstrap` host is destroyed. |
+| <font size="2.5"> consul-client-1 </font> | A 1-node compute cluster, each running a Consul client|
 
 
 ## Usage
@@ -24,36 +23,13 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
 ### Cluster Creation
 
 ```
-# vConsul.sh Bash Script to perform Vagrant Provisioning, Startup, and Shutdown functions of Consul Cluster
-# Initially build or rebuild Consul Cluster
- ./vConsul.sh -init
+# Consul Cluster -- Vagrant Provisioning and Cleanup
 
-# Reload/Startup Consul Cluster Members
- ./vConsul.sh -start
+# Create the Consul servers and Clients
+vagrant up
 
-# Shutdown Consul Cluster Members
- ./vConsul.sh -stop
-
-# Re-provision Consul Cluster Members
- ./vConsul.sh -reprovision
-
-#### vConsul.sh provisioning process
-# Create the first Consul server to bootstrap the Consul cluster
-vagrant up bootstrap
-
-# Create the rest of the Consul servers
-vagrant up consul-01
-vagrant up consul-02
-vagrant up consul-03
-
-# Create compute VMs
-vagrant up client-01
-vagrant up client-02
-
-# Destroy the BootStrap VM since no longer needed
-vagrant destroy bootstrap -f
-
-# Develop/Learn HashiCorp's Consul Service Mesh Control Plane Solution
+# Destroy Vagrant Consul Cluster
+vagrant destroy -f
 ```
 ## References
 
