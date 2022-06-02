@@ -1,0 +1,26 @@
+{
+  "snapshot_agent": {
+    "http_addr": "https://127.0.2.1:8501",
+    "datacenter": "dc1",
+    "ca_file": "/etc/consul.d/tls/consul-agent-ca.pem",
+    "cert_file": "/etc/consul.d/tls/dc1-server-consul-0.pem",
+    "key_file": "/etc/consul.d/tls/dc1-server-consul-0-key.pem",
+    "log": {
+      "level": "DEBUG",
+      "enable_syslog": false,
+      "syslog_facility": "LOCAL0"
+    },
+    "snapshot": {
+      "interval": "1h",
+      "retain": 30,
+      "stale": false,
+      "service": "consul-snapshot",
+      "deregister_after": "72h",
+      "lock_key": "consul-snapshot/lock",
+      "max_failures": 3
+    },
+    "local_storage": {
+      "path": "."
+    }
+  }
+}
