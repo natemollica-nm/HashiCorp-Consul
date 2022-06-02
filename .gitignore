@@ -1,6 +1,7 @@
 .vagrant
 *.iso
 *.log
+*.hclic
 user-data
 
 # session
