@@ -2,6 +2,7 @@
 *.iso
 *.log
 *.hclic
+*.pem
 user-data
 
 # session

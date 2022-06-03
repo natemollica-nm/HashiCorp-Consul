@@ -1,7 +1,5 @@
 #!/bin/bash
 
-HOME_ROUTER_DEFAULT_IP="192.168.0.1"
-
 function print_usage {
   echo
   echo "Usage: install-consul [OPTIONS]"
@@ -87,64 +85,23 @@ function install_dependencies {
 }
 
 function configure_vagrant_router {
-  local -r ip="$1"
-
   log_info "[+] Configuring ipv4 forwarding for .1 IPs (/etc/sysctl.conf)...."
   echo -e "net.ipv4.ip_forward=1" | sudo tee --append /etc/sysctl.conf
   log_info "[+] Configuring iptables for localhost ethernet adapters...."
-  sudo iptables -A FORWARD -i lo -o eth3 -j ACCEPT
-  sudo iptables -A FORWARD -i eth0 -o eth3 -j ACCEPT
-  sudo iptables -A FORWARD -i eth1 -o eth3 -j ACCEPT
-  sudo iptables -A FORWARD -i eth2 -o eth3 -j ACCEPT
   sudo iptables -A FORWARD -i  eth3 -o eth2 -j ACCEPT
   sudo iptables -A FORWARD -i  eth3 -o eth1 -j ACCEPT
-  sudo iptables -A FORWARD -i  eth3 -o eth0 -j ACCEPT
-  sudo iptables -A FORWARD -i  eth3 -o lo -j ACCEPT
   log_info "[+] Configuring NAT for localhost ethernet adapters...."
-  sudo iptables -t nat -A POSTROUTING -o eth3 -j MASQUERADE
   sudo iptables -t nat -A POSTROUTING -o eth2 -j MASQUERADE
   sudo iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE
-  sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-  sudo iptables -t nat -A POSTROUTING -o lo -j MASQUERADE
   log_info "[+] Removing default gateway via 10.0.2.2...."
-  sudo route del default gw 10.0.2.2
-  log_info "[+] Setting default gateway to $ip...."
-  sudo ip route add default via "$ip"
+  sudo ip route del default via 10.0.2.2
   log_info "[+] Saving iptables configurations...."
   sudo echo -e 'y\ny\n' | sudo iptables-save
   log_info "[+] Disabling Ubuntu UFW...."
   sudo ufw disable
 }
 
-
 function run_router_config {
-  local home_router_ip="$HOME_ROUTER_DEFAULT_IP"
-
-  while [[ $# -gt 0 ]]; do
-    local key="$1"
-
-    case "$key" in
-      --router-ip)
-        assert_not_empty "$key" "$2"
-        home_router_ip="$2"
-        shift
-        ;;
-      --help)
-        print_usage
-        exit
-        ;;
-      *)
-        log_error "Unrecognized argument: $key"
-        print_usage
-        exit 1
-        ;;
-    esac
-
-    shift
-  done
-
-  assert_not_empty "--router-ip" "$home_router_ip"
-
   log_info "[+] Starting Ubuntu Router Configuration"
   install_dependencies
   log_info "[+] Verifying dependencies..."
@@ -156,10 +113,8 @@ function run_router_config {
   assert_is_installed "nmap"
   assert_is_installed "socat"
   assert_is_installed "iptables-save"
-
-  configure_vagrant_router "$home_router_ip"
-
+  configure_vagrant_router
   log_info "[+] Ubuntu Router Configuration Complete!"
 }
 
-run_router_config "$@"
+run_router_config

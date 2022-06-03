@@ -1,5 +1,4 @@
 #!/bin/bash
-
 LAN_IP_PREFIX_DC1="20.0.0"
 WAN_IP_PREFIX="192.168.0"
 LAN_IP_PREFIX_DC2="20.1.0"
@@ -105,8 +104,10 @@ function configure_node_iptables {
   sudo iptables -A INPUT -p udp --dport 21000:21255 -j ACCEPT
 
   log_info "[+] IPTABLES: Remote -> Local LAN Allow (All)"
+  sudo iptables -A INPUT -s "$remote_lan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
   sudo iptables -A OUTPUT -s "$remote_lan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
   sudo iptables -A INPUT -s "$local_lan_net.0/24" -d "$remote_lan_net.0/24" -j ACCEPT
+  sudo iptables -A OUTPUT -s "$local_lan_net.0/24" -d "$remote_lan_net.0/24" -j ACCEPT
 
   log_info "[+] Saving iptables configurations...."
   sudo echo -e 'y\ny\n' | sudo iptables-save
@@ -120,10 +121,12 @@ function configure_node_routing {
   local -r remote_lan_net="$2"
   local -r wan_net="$3"
 
-
-  sudo ip route add default via "$wan_net.101"
-  sudo route del default gw 10.0.2.2
-  sudo route add -net "$remote_lan_net.0" netmask 255.255.255.0 gw "$local_lan_net.1"
+  log_info "[+] Setting default gateway --> $local_lan_net.1"
+  sudo route -A inet add default gw "$local_lan_net.1"
+  sudo route -A inet add -net "$remote_lan_net.0" netmask 255.255.255.0 gw "$local_lan_net.1"
+  sudo route -A inet add -net "$wan_net.0" netmask 255.255.255.0 gw "$wan_net.1"
+  log_info "[+] Removing default gateway via 10.0.2.2...."
+  sudo ip route del default via 10.0.2.2
 }
 
 function run_consul_node_config {
@@ -184,7 +187,6 @@ function run_consul_node_config {
   configure_node_iptables
 
   log_info "[+] Consul Node Routing and iptables Configuration Complete!"
-
 }
 
 run_consul_node_config "$@"
