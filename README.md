@@ -11,11 +11,14 @@ A 6-Node [Consul][a01] cluster ( inspired by [vagrant-consul-cluster][a16] ) for
 5. Reliable Internet Connection
 6. Knowledge of internal home network IP scheme (simulated WAN network).
 7. Knowledge of MacBook's usable network adapters for bridging VM network.
-   * Run: ```network setup -listallhardwareports``` for list of network adapters.
-8. Valid Consul Enterprise License if using Consul Enterprise.
-9. [Vagrant][a13] 1.9.1 or newer.
-10. Vagrant Reload plugin installed ([Vagrant Reload Plugin][a17])
-11. [VirtualBox][a14] 5.1.x or newer
+
+   ```console
+   user@macbook:~$ network setup -listallhardwareports
+   ```
+9. Valid Consul Enterprise License if using Consul Enterprise.
+10. [Vagrant][a13] 1.9.1 or newer.
+11. Vagrant Reload plugin installed ([Vagrant Reload Plugin][a17])
+12. [VirtualBox][a14] 5.1.x or newer
 
 ## Cluster Architecture
 The `Vagrantfile` is set up to create 6 hosts of various types as described below.
@@ -125,7 +128,7 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
 
 ## Configuring Prerequisites
 ```Vagrantfile```
-```asm
+```ruby
 CONSUL_VERSION="1.11.5+ent"
 ENVOY_VERSION="1.20.2"
 LAN_IP_DC1="20.0.0"
@@ -147,7 +150,7 @@ VirtualBox utilizes a preset *192.168.65.0/24* networking scheme.
 In order to allow for alternative networking configurations (i.e., the kind required by this repository), please ensure of the following:
 
 1. Create VirtualBox ```networks.conf```
-   ```
+   ```console
    sudo mkdir -p /etc/vbox
    sudo touch /etc/vbox/networks.conf
    ```
@@ -155,7 +158,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 2. Edit the networks.conf (nano/vim) file to encompass the required networks. 
    
     *Note: adjust the first CIDR addressing to match your home networking scheme.*
-   ```
+   ```vim
    * 192.168.0.0/24 192.168.65.0/24 20.0.0.0/24 20.1.0.0/24
    ```
 3. Save the networks.conf file as applicable by your editor (nano/vim).
@@ -185,6 +188,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 5. (Optional) Add the anticipated cluster host IPs to your ```/etc/hosts``` file to promote a faster provisioning process.
 
 ```console
+# LAN IPs
 20.0.0.10 consul-dc1-server-0
 20.0.0.20 consul-dc1-server-1
 20.0.0.30 consul-dc1-server-2
@@ -195,6 +199,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 20.1.0.30 consul-dc2-server-2
 20.1.0.40 consul-dc2-server-3
 20.1.0.55 consul-dc2-mesh-gw
+# WAN IPs
 192.168.0.100 consul-dc1-server-0
 192.168.0.150 consul-dc1-server-1
 192.168.0.160 consul-dc1-server-2
