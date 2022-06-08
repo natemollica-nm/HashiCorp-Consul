@@ -214,13 +214,17 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 
 7. Start the Consul cluster Ubuntu Router and Primary DC provisioning process.
 
-```vagrant up consul-cluster-router consul-dc1-server-0 consul-dc1-server-1 consul-dc1-mesh-gw```
+   ```console
+   vagrant up consul-cluster-router consul-dc1-server-0 consul-dc1-server-1 consul-dc1-mesh-gw
+   ```
 
 6. Monitor provisioning of Primary DC until completion.
 
 7. Start the Consul cluster Secondary DC provisioning process
 
-```vagrant up consul-dc2-server-0 consul-dc2-server-1 consul-dc2-mesh-gw```
+   ```console
+   vagrant up consul-dc2-server-0 consul-dc2-server-1 consul-dc2-mesh-gw
+   ```
 
 8. Monitor provisioning of Secondary DC until completion.
 
@@ -228,7 +232,9 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 
 Destroy all Vagrant VirtualBox VMs
 
-```vagrant destroy -f```
+   ```console
+   vagrant destroy -f
+   ```
 
 ## References
 
