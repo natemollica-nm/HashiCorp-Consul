@@ -123,9 +123,7 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
 </table>
 <p>&nbsp;</p>
 
-## Usage
-
-### Configuring Prerequisites
+## Configuring Prerequisites
 ```Vagrantfile```
 ```asm
 CONSUL_VERSION="1.11.5+ent"
@@ -163,7 +161,7 @@ sudo touch /etc/vbox/networks.conf
 3. Save the networks.conf file as applicable by your editor (nano/vim).
 4. Restart the VirtualBox application to apply changes.
 
-### Vagrant Repository Configuration | Cluster Creation
+## Vagrant Repository Configuration | Cluster Creation
 
 1. Clone the Vagrant Consul Cluster repository to a working directory you desire.
 
@@ -189,7 +187,7 @@ sudo touch /etc/vbox/networks.conf
 
 8. Monitor provisioning of Secondary DC until completion.
 
-### Vagrant Cluster Removal
+## Vagrant Cluster Removal
 
 Destroy all Vagrant VirtualBox VMs
 
