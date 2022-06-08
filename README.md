@@ -136,20 +136,6 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
 
 
 ## Configuring Prerequisites
-```Vagrantfile```
-```ruby
-CONSUL_VERSION="1.11.5+ent"
-ENVOY_VERSION="1.20.2"
-LAN_IP_DC1="20.0.0"
-LAN_IP_DC2="20.1.0"
-WAN_IP="192.168.0"
-MAC_NETWORK_BRIDGE="en0: Wi-Fi"
-```
-These variables can be set to configure the Consul Version, Envoy Version, and LAN and WAN specifics of your desired configuration.
- Ensure your simulated WAN IP CIDR corresponds to your home specific network configuration and your MAC_NETWORK_BRIDGE is set to 
-your desired network adapter.
-Ensure the Consul-Envoy versions being used are in accordance with HashiCorp's supported versioning found 
-at https://www.consul.io/docs/connect/proxies/envoy
 
 ## VirtualBox Private Network Configuration
 ```/etc/vbox/networks.conf```
@@ -189,13 +175,24 @@ In order to allow for alternative networking configurations (i.e., the kind requ
    ```
 
 
-4. If applicable, edit the imported ```Vagrantfile``` variables for the 
-   * **Consul** version
-   * **Envoy** version
-   * Network IP Scheme
-   * Network Adapter Bridge
+4. If applicable, edit the imported ```Vagrantfile``` variables for the
 
-5. (Optional) Append the anticipated cluster host IPs to your ```/etc/hosts``` file to promote a faster provisioning process.
+   ```ruby
+   CONSUL_VERSION="1.11.5+ent"
+   ENVOY_VERSION="1.20.2"
+   LAN_IP_DC1="20.0.0"
+   LAN_IP_DC2="20.1.0"
+   WAN_IP="192.168.0"
+   MAC_NETWORK_BRIDGE="en0: Wi-Fi"
+   ```
+   *Note: These variables can be set to configure the Consul Version, Envoy Version, and LAN and WAN specifics of your desired configuration.*
+   *Ensure your simulated WAN IP CIDR corresponds to your home specific network configuration and your MAC_NETWORK_BRIDGE is set to
+   your desired network adapter.
+   Ensure the Consul-Envoy versions being used are in accordance with HashiCorp's supported versioning found*
+   *at* https://www.consul.io/docs/connect/proxies/envoy
+
+
+6. (Optional) Append the anticipated cluster host IPs to your ```/etc/hosts``` file to promote a faster provisioning process.
 
    ```console
    # LAN IPs
@@ -228,15 +225,15 @@ In order to allow for alternative networking configurations (i.e., the kind requ
    vagrant up consul-cluster-router consul-dc1-server-0 consul-dc1-server-1 consul-dc1-mesh-gw
    ```
 
-6. Monitor provisioning of Primary DC until completion.
+8. Monitor provisioning of Primary DC until completion.
 
-7. Start the Consul cluster Secondary DC provisioning process
+9. Start the Consul cluster Secondary DC provisioning process
 
    ```console
    vagrant up consul-dc2-server-0 consul-dc2-server-1 consul-dc2-mesh-gw
    ```
 
-8. Monitor provisioning of Secondary DC until completion.
+10. Monitor provisioning of Secondary DC until completion.
 
 ## Vagrant Cluster Removal
 
