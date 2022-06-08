@@ -140,42 +140,74 @@ Ensure the Consul-Envoy versions being used are in accordance with HashiCorp's s
 at https://www.consul.io/docs/connect/proxies/envoy
 
 ## VirtualBox Private Network Configuration
-```networks.conf```
+```/etc/vbox/networks.conf```
 
 VirtualBox utilizes a preset *192.168.65.0/24* networking scheme.
 
 In order to allow for alternative networking configurations (i.e., the kind required by this repository), please ensure of the following:
 
 1. Create VirtualBox ```networks.conf```
-```
-sudo mkdir -p /etc/vbox
-sudo touch /etc/vbox/networks.conf
-```
+   ```
+   sudo mkdir -p /etc/vbox
+   sudo touch /etc/vbox/networks.conf
+   ```
 
 2. Edit the networks.conf (nano/vim) file to encompass the required networks. 
    
     *Note: adjust the first CIDR addressing to match your home networking scheme.*
-```
-* 192.168.0.0/24 192.168.65.0/24 20.0.0.0/24 20.1.0.0/24
-```
+   ```
+   * 192.168.0.0/24 192.168.65.0/24 20.0.0.0/24 20.1.0.0/24
+   ```
 3. Save the networks.conf file as applicable by your editor (nano/vim).
 4. Restart the VirtualBox application to apply changes.
 
-## Vagrant Repository Configuration | Cluster Creation
+# Cluster Creation
 
 1. Clone the Vagrant Consul Cluster repository to a working directory you desire.
+ 
+   ```console
+   git clone https://github.com/natemollica-nm/vagrant-consul-cluster
+   ```
 
-```git clone https://github.com/natemollica-nm/vagrant-consul-cluster```
 
-2. Initialize Vagrant environment
+2. Initialize Vagrant environment.
 
-```vagrant init```
+   ```console
+   vagrant init
+   ```
 
-3. If applicable, edit the imported Vagrantfile variables for the desired Consul and Envoy versioning, Network configurations, and network adapter bridge.
 
-4. (Optional) Add the anticipated cluster host IPs to your /etc/hosts file to promote a faster provisioning process.
+4. If applicable, edit the imported ```Vagrantfile``` variables for the 
+   * **Consul** and **Envoy** versioning
+   * Network IP Scheme
+   * Network Adapter Bridge
 
-5. Start the Consul cluster Ubuntu Router and Primary DC provisioning process.
+5. (Optional) Add the anticipated cluster host IPs to your ```/etc/hosts``` file to promote a faster provisioning process.
+
+```console
+20.0.0.10 consul-dc1-server-0
+20.0.0.20 consul-dc1-server-1
+20.0.0.30 consul-dc1-server-2
+20.0.0.40 consul-dc1-server-3
+20.0.0.55 consul-dc1-mesh-gw
+20.1.0.10 consul-dc2-server-0
+20.1.0.20 consul-dc2-server-1
+20.1.0.30 consul-dc2-server-2
+20.1.0.40 consul-dc2-server-3
+20.1.0.55 consul-dc2-mesh-gw
+192.168.0.100 consul-dc1-server-0
+192.168.0.150 consul-dc1-server-1
+192.168.0.160 consul-dc1-server-2
+192.168.0.165 consul-dc1-server-3
+192.168.0.170 consul-dc2-server-0
+192.168.0.180 consul-dc2-server-1
+192.168.0.190 consul-dc2-server-2
+192.168.0.195 consul-dc2-server-3
+192.168.0.155 consul-dc1-mesh-gw
+192.168.0.185 consul-dc2-mesh-gw
+```
+
+7. Start the Consul cluster Ubuntu Router and Primary DC provisioning process.
 
 ```vagrant up consul-cluster-router consul-dc1-server-0 consul-dc1-server-1 consul-dc1-mesh-gw```
 
