@@ -55,6 +55,10 @@ function install_dependencies {
 }
 
 function configure_node_iptables {
+  local -r local_lan_net="$1"
+  local -r remote_lan_net="$2"
+  local -r wan_net="$3"
+
   log_info "[+] Starting Consul Node iptables Configuration..."
 
   log_info "[+] IPTABLES: Server RPC - Port 8300 (TCP)"
@@ -97,6 +101,34 @@ function configure_node_iptables {
   sudo iptables -A INPUT -p tcp --dport 8502 -j ACCEPT
   sudo iptables -A INPUT -p udp --dport 8502 -j ACCEPT
 
+  log_info "[+] IPTABLES: Consul Connect Envoy Mesh GW - Port 8443 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8443 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8443 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8443 -j ACCEPT
+
+  log_info "[+] IPTABLES: Consul Connect Envoy admin UI - Port 19000 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 19000:19002 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 19000:19002 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 19000:19002 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 19000:19002 -j ACCEPT
+
+  log_info "[+] IPTABLES: Consul Connect Envoy Terminating GW - Port 9443 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 9443 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 9443 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 9443 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 9443 -j ACCEPT
+
+  log_info "[+] IPTABLES: Consul Connect Envoy Counting/Dashboard - Port 9000-9005 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 9000:9005 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 9000:9005 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 9000:9005 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 9000:9005 -j ACCEPT
+  sudo iptables -A OUTPUT -p tcp --dport 5000:5005 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 5000:5005 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 5000:5005 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 5000:5005 -j ACCEPT
+
   log_info "[+] IPTABLES: Envoy Sidecar Proxy Min/Max - Ports 21000:21255 (UDP/TCP)"
   sudo iptables -A OUTPUT -p tcp --dport 21000:21255 -j ACCEPT
   sudo iptables -A OUTPUT -p udp --dport 21000:21255 -j ACCEPT
@@ -108,6 +140,10 @@ function configure_node_iptables {
   sudo iptables -A OUTPUT -s "$remote_lan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
   sudo iptables -A INPUT -s "$local_lan_net.0/24" -d "$remote_lan_net.0/24" -j ACCEPT
   sudo iptables -A OUTPUT -s "$local_lan_net.0/24" -d "$remote_lan_net.0/24" -j ACCEPT
+  sudo iptables -A INPUT -s "$wan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
+  sudo iptables -A OUTPUT -s "$wan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
+  sudo iptables -A INPUT -s "$local_lan_net.0/24" -d "$wan_net.0/24" -j ACCEPT
+  sudo iptables -A OUTPUT -s "$local_lan_net.0/24" -d "$wan_net.0/24" -j ACCEPT
 
   log_info "[+] Saving iptables configurations...."
   sudo echo -e 'y\ny\n' | sudo iptables-save
@@ -184,7 +220,7 @@ function run_consul_node_config {
   assert_is_installed "iptables-save"
 
   configure_node_routing "$local_lan_net" "$remote_lan_net" "$wan_net"
-  configure_node_iptables
+  configure_node_iptables "$local_lan_net" "$remote_lan_net" "$wan_net"
 
   log_info "[+] Consul Node Routing and iptables Configuration Complete!"
 }

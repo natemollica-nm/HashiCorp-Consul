@@ -1,26 +1,30 @@
 node_name  = "consul-dc1-mesh-gw"
 datacenter = "dc1"
-log_level  = "DEBUG"
+log_level  = "TRACE"
 server     = true
 
 domain     = "consul"
 data_dir   = "/opt/consul/data"
 
-advertise_addr = "{{ GetInterfaceIP `eth1` }}"
-client_addr    = "0.0.0.0"
-bind_addr      = "0.0.0.0"
-advertise_addr_wan  = "{{ GetInterfaceIP `eth2` }}"
+client_addr    = "0.0.0.0" # Sets interface for DNS, HTTP, HTTPS, GRPC / overridden by addresses entry / defaults to 127.0.0.1
+bind_addr      =  "0.0.0.0" # RPC internal cluster comms / defaults to 0.0.0.0 / sets advertise_addr (default)
+advertise_addr = "{{ GetInterfaceIP `eth1` }}" # Advertises IP to other nodes in cluster (set in case bind_addr not routable)
+advertise_addr_ipv4 = "{{ GetInterfaceIP `eth1` }}" # added for dual stack ipv4/ipv6 environments
+advertise_addr_wan =  "{{ GetInterfaceIP `eth2` }}" # WAN Join advertisement for nodes
+advertise_addr_wan_ipv4  = "{{ GetInterfaceIP `eth2` }}" # WAN Join - added for dual stack ipv4/ipv6 environments
+
 translate_wan_addrs = true
 
 leave_on_terminate = true
 retry_join         = [
     "consul-dc1-server-0",
     "consul-dc1-server-1",
-    "consul-dc1-server-2",
-    "consul-dc1-server-3"
+    "consul-dc1-mesh-gw"
 ]
 addresses {
-    grpc  = "127.0.2.1"
+    grpc  = "127.0.0.1"
+    http  = "0.0.0.0"
+    https = "0.0.0.0"
 }
 ports {
     serf_lan  = 8301
@@ -36,7 +40,7 @@ ports {
     expose_max_port   = 21755
 }
 
-bootstrap_expect = 5
+bootstrap_expect = 3
 license_path = "/etc/consul.d/consul.hclic"
 
 enable_central_service_config = true
@@ -51,6 +55,9 @@ config_entries {
             }
             MeshGateway = {
                 Mode = "local"
+            }
+            Expose = {
+                Checks = true
             }
         }
     ]

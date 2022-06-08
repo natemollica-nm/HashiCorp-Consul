@@ -85,8 +85,7 @@ function install_dependencies {
 }
 
 function configure_vagrant_router {
-  log_info "[+] Configuring ipv4 forwarding for .1 IPs (/etc/sysctl.conf)...."
-  echo -e "net.ipv4.ip_forward=1" | sudo tee --append /etc/sysctl.conf
+
   log_info "[+] Configuring iptables for localhost ethernet adapters...."
   sudo iptables -A FORWARD -i  eth3 -o eth2 -j ACCEPT
   sudo iptables -A FORWARD -i  eth3 -o eth1 -j ACCEPT
