@@ -1,5 +1,7 @@
 # Vagrant VM Service Mesh (hashicorp/bionic64)
-
+<h2>
+  <img style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 15px;" src="https://mktg-content-api-hashicorp.vercel.app/api/assets?product=consul&version=refs%2Fheads%2Fstable-website&asset=website%2Fpublic%2F%2Fimg%2Fwan-federation-connectivity-mesh-gateways.png&width=2048&height=2403" alt="Screen_Shot_2022-06-01_at_1.18.56_PM.png">
+</h2>
 A 6-Node [Consul][a01] cluster ( inspired by [vagrant-consul-cluster][a16] ) for configuring and testing Consul locally.
 
 ## Prerequisites
@@ -48,10 +50,16 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
           <li>
             Installed Dependencies -
             <ul>
-              <li>
-                curl, wget, software-properties-common, jq, unzip,
-                traceroute, nmap, socat, iptables-persistent, dnsmasq
-              </li>
+              <li>curl</li>
+              <li>wget</li>
+              <li>software-properties-common</li>
+              <li>jq</li>
+              <li>unzip</li>
+              <li>traceroute</li>
+              <li>nmap</li>
+              <li>socat</li>
+              <li>iptables-persistent</li>
+              <li>dnsmasq</li>
             </ul>
           </li>
           <li>
@@ -124,7 +132,7 @@ The `Vagrantfile` is set up to create 6 hosts of various types as described belo
     </tr>
   </tbody>
 </table>
-<p>&nbsp;</p>
+
 
 ## Configuring Prerequisites
 ```Vagrantfile```
@@ -181,36 +189,37 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 
 
 4. If applicable, edit the imported ```Vagrantfile``` variables for the 
-   * **Consul** and **Envoy** versioning
+   * **Consul** version
+   * **Envoy** version
    * Network IP Scheme
    * Network Adapter Bridge
 
-5. (Optional) Add the anticipated cluster host IPs to your ```/etc/hosts``` file to promote a faster provisioning process.
+5. (Optional) Append the anticipated cluster host IPs to your ```/etc/hosts``` file to promote a faster provisioning process.
 
-```console
-# LAN IPs
-20.0.0.10 consul-dc1-server-0
-20.0.0.20 consul-dc1-server-1
-20.0.0.30 consul-dc1-server-2
-20.0.0.40 consul-dc1-server-3
-20.0.0.55 consul-dc1-mesh-gw
-20.1.0.10 consul-dc2-server-0
-20.1.0.20 consul-dc2-server-1
-20.1.0.30 consul-dc2-server-2
-20.1.0.40 consul-dc2-server-3
-20.1.0.55 consul-dc2-mesh-gw
-# WAN IPs
-192.168.0.100 consul-dc1-server-0
-192.168.0.150 consul-dc1-server-1
-192.168.0.160 consul-dc1-server-2
-192.168.0.165 consul-dc1-server-3
-192.168.0.170 consul-dc2-server-0
-192.168.0.180 consul-dc2-server-1
-192.168.0.190 consul-dc2-server-2
-192.168.0.195 consul-dc2-server-3
-192.168.0.155 consul-dc1-mesh-gw
-192.168.0.185 consul-dc2-mesh-gw
-```
+   ```console
+   # LAN IPs
+   20.0.0.10 consul-dc1-server-0
+   20.0.0.20 consul-dc1-server-1
+   20.0.0.30 consul-dc1-server-2
+   20.0.0.40 consul-dc1-server-3
+   20.0.0.55 consul-dc1-mesh-gw
+   20.1.0.10 consul-dc2-server-0
+   20.1.0.20 consul-dc2-server-1
+   20.1.0.30 consul-dc2-server-2
+   20.1.0.40 consul-dc2-server-3
+   20.1.0.55 consul-dc2-mesh-gw
+   # WAN IPs
+   192.168.0.100 consul-dc1-server-0
+   192.168.0.150 consul-dc1-server-1
+   192.168.0.160 consul-dc1-server-2
+   192.168.0.165 consul-dc1-server-3
+   192.168.0.170 consul-dc2-server-0
+   192.168.0.180 consul-dc2-server-1
+   192.168.0.190 consul-dc2-server-2
+   192.168.0.195 consul-dc2-server-3
+   192.168.0.155 consul-dc1-mesh-gw
+   192.168.0.185 consul-dc2-mesh-gw
+   ```
 
 7. Start the Consul cluster Ubuntu Router and Primary DC provisioning process.
 
@@ -238,8 +247,8 @@ Destroy all Vagrant VirtualBox VMs
 
 ## References
 
-1. [Consul documentation][a01]
-1. [Wicked Awesome Tech: Setting up Consul Service Discovery for Mesos in 10 Minutes][a02]
+1. [Consul Documentation][a01]
+1. [WAN Federation via Mesh Gateways][a02]
 1. [Get Docker for Ubuntu][a03]
 1. [kelseyhightower/setup-network-environment][a04]
 1. [AWS Compute Blog: Service Discovery via Consul with Amazon ECS][a05]
@@ -250,7 +259,7 @@ Destroy all Vagrant VirtualBox VMs
 1. [Vagrant Consul Cluster GitHub Repo: vagrant-consul-cluster][a16]
 
 [a01]: https://www.consul.io/
-[a02]: http://www.wickedawesometech.us/2016/04/setting-up-consul-service-discovery-in.html
+[a02]: https://www.consul.io/docs/connect/gateways/mesh-gateway/wan-federation-via-mesh-gateways
 [a03]: https://docs.docker.com/engine/installation/linux/ubuntu/
 [a04]: https://github.com/kelseyhightower/setup-network-environment
 [a05]: https://aws.amazon.com/blogs/compute/service-discovery-via-consul-with-amazon-ecs/
