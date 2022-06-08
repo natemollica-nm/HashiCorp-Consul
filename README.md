@@ -2,6 +2,7 @@
 <h2>
   <img style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 15px;" src="https://mktg-content-api-hashicorp.vercel.app/api/assets?product=consul&version=refs%2Fheads%2Fstable-website&asset=website%2Fpublic%2F%2Fimg%2Fwan-federation-connectivity-mesh-gateways.png&width=2048&height=2403" alt="Screen_Shot_2022-06-01_at_1.18.56_PM.png">
 </h2>
+
 A 6-Node [Consul][a01] cluster ( inspired by [vagrant-consul-cluster][a16] ) for configuring and testing Consul locally.
 
 ## Prerequisites
