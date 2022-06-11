@@ -8,7 +8,7 @@ ENVOY_VERSION="1.20.2"
 LAN_IP_DC1="20.0.0"
 LAN_IP_DC2="20.1.0"
 WAN_IP="192.168.0"
-MAC_NETWORK_BRIDGE="en8: AX88179A"
+MAC_NETWORK_BRIDGE="en6: AX88179A"
 
 $router = <<-ROUTER
 echo "[+] Configuring ipv4 forwarding for .1 IPs (/etc/sysctl.conf)...."
@@ -25,7 +25,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box = "hashicorp/bionic64" # Ubuntu 18.04 LTS 64-bit Box
   config.vm.provider "virtualbox" do |v|
     v.cpus = 6
-    v.memory = "2048"
+    v.memory = "4096"
    end
 
     config.vm.define "consul-cluster-router" do |router|
@@ -49,7 +49,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     config.vm.define "consul-dc1-server-0" do |consul0|
         consul0.vm.provision "shell", path: "prov/install-consul", run: "once",
-            args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc1' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
+            args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc1' '--certificate-authority' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul0.vm.hostname = "consul-dc1-server-0"
         consul0.vm.network "public_network", ip: "#{LAN_IP_DC1}.10", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul0.vm.network "public_network", ip: "#{WAN_IP}.100", bridge: "#{MAC_NETWORK_BRIDGE}"
@@ -155,7 +155,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         consul20.vm.network "public_network", ip: "#{WAN_IP}.170", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul20.vm.provision "shell", inline: $node, run: "once"
         consul20.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
-        consul20.vm.network "forwarded_port", guest: 8501, host: 8501, protocol: "tcp"
+        consul20.vm.network "forwarded_port", guest: 8500, host: 9500, protocol: "tcp"
         consul20.vm.provision "shell", path: "scripts/vagrant-routing/consul-node-routing.sh", run: "always",
             args: "'--local-lan' #{LAN_IP_DC2} '--remote-lan' #{LAN_IP_DC1} '--wan-net' #{WAN_IP}"
         consul20.vm.provision "file", source: "consul/services/", destination: "$HOME/"

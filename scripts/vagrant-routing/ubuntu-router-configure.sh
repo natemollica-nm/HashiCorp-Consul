@@ -1,5 +1,9 @@
 #!/bin/bash
 
+LAN_IP_PREFIX_DC1="20.0.0"
+LAN_IP_PREFIX_DC2="20.1.0"
+WAN_IP_PREFIX="192.168.0"
+
 function print_usage {
   echo
   echo "Usage: install-consul [OPTIONS]"
@@ -85,13 +89,15 @@ function install_dependencies {
 }
 
 function configure_vagrant_router {
+  local -r local_lan_one="$1"
+  local -r local_lan_two="$2"
 
   log_info "[+] Configuring iptables for localhost ethernet adapters...."
-  sudo iptables -A FORWARD -i  eth3 -o eth2 -j ACCEPT
-  sudo iptables -A FORWARD -i  eth3 -o eth1 -j ACCEPT
+  sudo iptables -A FORWARD -i eth1 -o eth2 -j ACCEPT
+  sudo iptables -A FORWARD -i eth2 -o eth1 -j ACCEPT
   log_info "[+] Configuring NAT for localhost ethernet adapters...."
-  sudo iptables -t nat -A POSTROUTING -o eth2 -j MASQUERADE
-  sudo iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE
+  sudo iptables -t nat -A PREROUTING -i eth1 -o eth2 -j DNAT --to-destinatino "$local_lan_two.2-$local_lan_two.254" MASQUERADE
+  sudo iptables -t nat -A PREROUTING -i eth2 -o eth1 -j DNAT --to-destination "$local_lan_one.2-$local_lan_one.254"MASQUERADE
   log_info "[+] Removing default gateway via 10.0.2.2...."
   sudo ip route del default via 10.0.2.2
   log_info "[+] Saving iptables configurations...."
@@ -101,6 +107,9 @@ function configure_vagrant_router {
 }
 
 function run_router_config {
+  local local_lan_one="$LAN_IP_PREFIX_DC1"
+  local local_lan_two="$LAN_IP_PREFIX_DC2"
+
   log_info "[+] Starting Ubuntu Router Configuration"
   install_dependencies
   log_info "[+] Verifying dependencies..."
@@ -112,8 +121,8 @@ function run_router_config {
   assert_is_installed "nmap"
   assert_is_installed "socat"
   assert_is_installed "iptables-save"
-  configure_vagrant_router
+  configure_vagrant_router "$local_lan_one" "$local_lan_two"
   log_info "[+] Ubuntu Router Configuration Complete!"
 }
 
-run_router_config
+run_router_config "$@"

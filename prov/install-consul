@@ -358,7 +358,7 @@ function create_cluster_cert {
       -additional-ipaddress="${server_ips["consul-dc2-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-2"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-3"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-mesh-gw"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-mesh-gw"]}" \
-      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" \
+      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" -additional-ipaddress="10.0.2.2" \
       && sleep 1
   fi
   if [[ "$srvr_or_clnt_or_cli" == "client" ]]; then
@@ -389,7 +389,7 @@ function create_cluster_cert {
       -additional-ipaddress="${server_ips["consul-dc2-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-2"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-3"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-mesh-gw"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-mesh-gw"]}" \
-      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" \
+      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" -additional-ipaddress="10.0.2.2"\
       && sleep 1
   fi
 }

@@ -64,6 +64,8 @@ function configure_node_iptables {
   log_info "[+] IPTABLES: Server RPC - Port 8300 (TCP)"
   sudo iptables -A OUTPUT -p tcp --dport 8300 -j ACCEPT
   sudo iptables -A INPUT -p tcp --dport 8300 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8300 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8300 -j ACCEPT
 
   log_info "[+] IPTABLES: LAN Serf - Port 8301 (UDP/TCP)"
   sudo iptables -A OUTPUT -p tcp --dport 8301 -j ACCEPT

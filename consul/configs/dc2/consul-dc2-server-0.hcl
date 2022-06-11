@@ -27,9 +27,9 @@ retry_join         = [
   "consul-dc2-mesh-gw"
 ]
 addresses {
-  grpc  = "127.0.0.1"
-  http  = "0.0.0.0"
-  https = "0.0.0.0"
+  grpc   = "127.0.0.1"
+  http   = "0.0.0.0"
+  https  = "0.0.0.0"
 }
 ports {
   serf_lan  = 8301
