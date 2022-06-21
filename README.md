@@ -71,7 +71,7 @@ Networking:
      /etc/hosts: Consul VM local LAN and remote WAN IPs configured
 ```
 
-###Consul
+### Consul
 
 ```zsh
 Consul Version: 1.11.5+ent
@@ -413,7 +413,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 2. From *consul-dc1-mesh-gw* run the following to setup Envoy Proxy log monitoring to stdout:
 
    ```zsh
-   touch envoy.out &amp;&amp; sudo chmod 777 envoy.out
+   touch envoy.out && sudo chmod 777 envoy.out
    tail -f envoy.out
    ```
 
