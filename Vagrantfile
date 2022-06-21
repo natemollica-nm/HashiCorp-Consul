@@ -8,7 +8,7 @@ ENVOY_VERSION="1.20.2"
 LAN_IP_DC1="20.0.0"
 LAN_IP_DC2="30.0.0"
 WAN_IP="192.169.7"
-MAC_NETWORK_BRIDGE="en6: AX88179A"
+MAC_NETWORK_BRIDGE="en0: Wi-Fi"
 
 $router = <<-ROUTER
 echo "[+] Configuring ipv4 forwarding for .1 IPs (/etc/sysctl.conf)...."
