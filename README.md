@@ -309,7 +309,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
    consul acl token create -description "replication token" -policy-name replication
    ```
 
- 6. Take note of ACL Replication token *SecretID*. In <span class="wysiwyg-underline">**ALL****DC2** servers ensure consul.hcl (*/etc/consul.d/consul.hcl*)
+ 6. Take note of ACL Replication token *SecretID*. In <span class="wysiwyg-underline">***ALL*** ***DC2*** servers ensure consul.hcl (*/etc/consul.d/consul.hcl*)
  configuration files have the following entries for ACL replication and Primary DC designation:
 
    ```zsh
@@ -331,7 +331,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
  9. Ensure no errors/warnings from Consul API in regard to ACL replication by running from any **DC2** Server:
    
    ```zsh
-   curl http://localhost:8500/v1/acl/replication?pretty
+   curl "http://localhost:8500/v1/acl/replication?pretty"
    ```
 
 
@@ -433,7 +433,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
    -service "mesh-gateway-dc1" \
    -address="20.0.0.55:8443" \
    -wan-address="192.169.7.150:8443" \
-   -token="<primary_mesh_gw_token_secretID> \
+   -token="<primary_mesh_gw_token_secretID>" \
    -ca-file="/etc/consul.d/tls/consul-agent-ca.pem" \
    -client-cert="/etc/consul.d/tls/dc1-server-consul-0.pem" \
    -client-key="/etc/consul.d/tls/dc1-server-consul-0-key.pem" \
@@ -451,7 +451,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
      -service "mesh-gateway-dc1" \
      -address="30.0.0.55:8443" \
      -wan-address="192.169.7.250:8443" \
-     -token="<secondary_mesh_gw_token_secretID> \
+     -token="<secondary_mesh_gw_token_secretID>" \
      -ca-file="/etc/consul.d/tls/consul-agent-ca.pem" \
      -client-cert="/etc/consul.d/tls/dc1-server-consul-0.pem" \
      -client-key="/etc/consul.d/tls/dc1-server-consul-0-key.pem" \
@@ -468,7 +468,7 @@ In order to allow for alternative networking configurations (i.e., the kind requ
 2. To verify health of Envoy Mesh GW from Consul CLI, run the following (*ensure &lt;dc&gt; is replaced with appropriate datacenter id*):
 
     ```zsh
-   curl http://127.0.0.1:8500/v1/health/checks/mesh-gateway-<dc>?pretty
+   curl "http://127.0.0.1:8500/v1/health/checks/mesh-gateway-<dc>?pretty"
    ```
 
 3. Perform step 1 or step 2 as desired for DC2's secondary Mesh GW.
