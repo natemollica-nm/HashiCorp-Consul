@@ -18,8 +18,8 @@ CONSUL_TLS_DIR="$CONSUL_CFG_DIR/tls"
 CONSUL_ENT_LIC="$VAGRANT_CONSUL_DIR/enterprise-license/consul.hclic"
 ## Cluster IP Information
 LAN_IP_PREFIX_DC1="20.0.0"
-WAN_IP_PREFIX="192.168.0"
-LAN_IP_PREFIX_DC2="20.1.0"
+WAN_IP_PREFIX="192.169.7"
+LAN_IP_PREFIX_DC2="30.0.0"
 declare -A server_ips=(
   ["consul-dc1-server-0"]="$LAN_IP_PREFIX_DC1.10"
   ["consul-dc1-server-1"]="$LAN_IP_PREFIX_DC1.20"
@@ -33,16 +33,16 @@ declare -A server_ips=(
   ["consul-dc2-mesh-gw"]="$LAN_IP_PREFIX_DC2.55"
 )
 declare -A server_ips_wan=(
-  ["consul-dc1-server-0"]="$WAN_IP_PREFIX.100"
-  ["consul-dc1-server-1"]="$WAN_IP_PREFIX.150"
-  ["consul-dc1-server-2"]="$WAN_IP_PREFIX.160"
-  ["consul-dc1-server-3"]="$WAN_IP_PREFIX.165"
-  ["consul-dc1-mesh-gw"]="$WAN_IP_PREFIX.155"
-  ["consul-dc2-server-0"]="$WAN_IP_PREFIX.170"
-  ["consul-dc2-server-1"]="$WAN_IP_PREFIX.180"
-  ["consul-dc2-server-2"]="$WAN_IP_PREFIX.190"
-  ["consul-dc2-server-3"]="$WAN_IP_PREFIX.195"
-  ["consul-dc2-mesh-gw"]="$WAN_IP_PREFIX.185"
+  ["consul-dc1-server-0"]="$WAN_IP_PREFIX.110"
+  ["consul-dc1-server-1"]="$WAN_IP_PREFIX.120"
+  ["consul-dc1-server-2"]="$WAN_IP_PREFIX.130"
+  ["consul-dc1-server-3"]="$WAN_IP_PREFIX.140"
+  ["consul-dc1-mesh-gw"]="$WAN_IP_PREFIX.150"
+  ["consul-dc2-server-0"]="$WAN_IP_PREFIX.210"
+  ["consul-dc2-server-1"]="$WAN_IP_PREFIX.220"
+  ["consul-dc2-server-2"]="$WAN_IP_PREFIX.230"
+  ["consul-dc2-server-3"]="$WAN_IP_PREFIX.240"
+  ["consul-dc2-mesh-gw"]="$WAN_IP_PREFIX.250"
 )
 declare -A client_ips=(
   ["consul-dc1-client-0"]="$LAN_IP_PREFIX_DC1.2"
@@ -203,8 +203,8 @@ function create_consul_install_paths {
 
 function install_dependencies {
   # Add the official HashiCorp Linux repository
-  log_info "[+] Installing dependencies and tools (curl|wget|software-props-common|jq|unzip|traceroute|nmap|socat)...."
-  apt-get -y -q install curl wget software-properties-common jq unzip traceroute nmap socat
+  log_info "[+] Installing dependencies and tools (curl|wget|software-props-common|jq|unzip|traceroute|nmap|socat|netcat)...."
+  apt-get -y -q install curl wget software-properties-common jq unzip traceroute nmap socat netcat
 
   log_info "[+] Adding HashiCorp apt repo..."
   curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
@@ -323,13 +323,52 @@ function run_consul_keygen {
 function install_envoy {
   local -r version="$1"
   if [[ -z "$version" ]]; then version="$ENVOY_DEFAULT_VERSION"; fi
+  local cpu_arch
+  cpu_arch="$(uname -m)"
+  local binary_arch=""
+  case "$cpu_arch" in
+    x86_64)
+      binary_arch="amd64"
+      ;;
+    x86)
+      binary_arch="386"
+      ;;
+    arm64|aarch64)
+      binary_arch="arm64"
+      ;;
+    arm*)
+      # The following info is taken from https://www.consul.io/downloads
+      #
+      # Note for ARM users:
+      #
+      # Use Armelv5 for all 32-bit armel systems
+      # Use Armhfv6 for all armhf systems with v6+ architecture
+      # Use Arm64 for all v8 64-bit architectures
+      # The following commands can help determine the right version for your system:
+      #
+      # $ uname -m
+      # $ readelf -a /proc/self/exe | grep -q -c Tag_ABI_VFP_args && echo "armhf" || echo "armel"
+      #
+      local vfp_tag
+      vfp_tag="$(readelf -a /proc/self/exe | grep -q -c Tag_ABI_VFP_args)"
+      if [[ -z $vfp_tag  ]]; then
+        binary_arch="armelv5"
+      else
+        binary_arch="armhfv6"
+      fi
+      ;;
+    *)
+      log_error "CPU architecture $cpu_arch is not a supported by Consul."
+      exit 1
+      ;;
+  esac
 
   log_info "[+] Installing Envoy Version $version"
-  wget "https://archive.tetratelabs.io/envoy/download/v${version}/envoy-v${version}-linux-amd64.tar.xz"
-  tar -xf "envoy-v${version}-linux-amd64.tar.xz"
-  sudo chmod +x "envoy-v${version}-linux-amd64/bin/envoy"
-  sudo mv "envoy-v${version}-linux-amd64/bin/envoy" "/usr/bin/envoy"
-  sudo rm -rf "envoy-v${version}-linux-amd64.tar.xz" "envoy-v${version}-linux-amd64"
+  wget "https://archive.tetratelabs.io/envoy/download/v${version}/envoy-v${version}-linux-${binary_arch}.tar.xz"
+  tar -xf "envoy-v${version}-linux-${binary_arch}.tar.xz"
+  sudo chmod +x "envoy-v${version}-linux-${binary_arch}/bin/envoy"
+  sudo mv "envoy-v${version}-linux-${binary_arch}/bin/envoy" "/usr/bin/envoy"
+  sudo rm -rf "envoy-v${version}-linux-${binary_arch}.tar.xz" "envoy-v${version}-linux-${binary_arch}"
 }
 
 function create_cluster_cert {
@@ -358,7 +397,8 @@ function create_cluster_cert {
       -additional-ipaddress="${server_ips["consul-dc2-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-2"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-3"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-mesh-gw"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-mesh-gw"]}" \
-      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" -additional-ipaddress="10.0.2.2" \
+      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" \
+      -additional-ipaddress="10.0.2.2" \
       && sleep 1
   fi
   if [[ "$srvr_or_clnt_or_cli" == "client" ]]; then
@@ -389,7 +429,8 @@ function create_cluster_cert {
       -additional-ipaddress="${server_ips["consul-dc2-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-2"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-3"]}" \
       -additional-ipaddress="${server_ips["consul-dc2-mesh-gw"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-mesh-gw"]}" \
-      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" -additional-ipaddress="10.0.2.2"\
+      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" \
+      -additional-ipaddress="10.0.2.2"\
       && sleep 1
   fi
 }

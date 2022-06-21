@@ -60,6 +60,8 @@ function configure_node_iptables {
   local -r wan_net="$3"
 
   log_info "[+] Starting Consul Node iptables Configuration..."
+  sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  sudo iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
   log_info "[+] IPTABLES: Server RPC - Port 8300 (TCP)"
   sudo iptables -A OUTPUT -p tcp --dport 8300 -j ACCEPT
@@ -103,39 +105,11 @@ function configure_node_iptables {
   sudo iptables -A INPUT -p tcp --dport 8502 -j ACCEPT
   sudo iptables -A INPUT -p udp --dport 8502 -j ACCEPT
 
-  log_info "[+] IPTABLES: Consul Connect Envoy Mesh GW - Port 8443 (UDP/TCP)"
-  sudo iptables -A OUTPUT -p tcp --dport 8443 -j ACCEPT
-  sudo iptables -A OUTPUT -p udp --dport 8443 -j ACCEPT
-  sudo iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
-  sudo iptables -A INPUT -p udp --dport 8443 -j ACCEPT
-
-  log_info "[+] IPTABLES: Consul Connect Envoy admin UI - Port 19000 (UDP/TCP)"
-  sudo iptables -A OUTPUT -p tcp --dport 19000:19002 -j ACCEPT
-  sudo iptables -A INPUT -p tcp --dport 19000:19002 -j ACCEPT
-  sudo iptables -A OUTPUT -p udp --dport 19000:19002 -j ACCEPT
-  sudo iptables -A INPUT -p udp --dport 19000:19002 -j ACCEPT
-
-  log_info "[+] IPTABLES: Consul Connect Envoy Terminating GW - Port 9443 (UDP/TCP)"
-  sudo iptables -A OUTPUT -p tcp --dport 9443 -j ACCEPT
-  sudo iptables -A INPUT -p tcp --dport 9443 -j ACCEPT
-  sudo iptables -A OUTPUT -p udp --dport 9443 -j ACCEPT
-  sudo iptables -A INPUT -p udp --dport 9443 -j ACCEPT
-
-  log_info "[+] IPTABLES: Consul Connect Envoy Counting/Dashboard - Port 9000-9005 (UDP/TCP)"
-  sudo iptables -A OUTPUT -p tcp --dport 9000:9005 -j ACCEPT
-  sudo iptables -A OUTPUT -p udp --dport 9000:9005 -j ACCEPT
-  sudo iptables -A INPUT -p tcp --dport 9000:9005 -j ACCEPT
-  sudo iptables -A INPUT -p udp --dport 9000:9005 -j ACCEPT
-  sudo iptables -A OUTPUT -p tcp --dport 5000:5005 -j ACCEPT
-  sudo iptables -A OUTPUT -p udp --dport 5000:5005 -j ACCEPT
-  sudo iptables -A INPUT -p tcp --dport 5000:5005 -j ACCEPT
-  sudo iptables -A INPUT -p udp --dport 5000:5005 -j ACCEPT
-
-  log_info "[+] IPTABLES: Envoy Sidecar Proxy Min/Max - Ports 21000:21255 (UDP/TCP)"
-  sudo iptables -A OUTPUT -p tcp --dport 21000:21255 -j ACCEPT
-  sudo iptables -A OUTPUT -p udp --dport 21000:21255 -j ACCEPT
-  sudo iptables -A INPUT -p tcp --dport 21000:21255 -j ACCEPT
-  sudo iptables -A INPUT -p udp --dport 21000:21255 -j ACCEPT
+  log_info "[+] IPTABLES: Default TCP/UDP Inbound/Outbound Service Ports (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 1024:65535 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 1024:65535 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 1024:65535 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 1024:65535 -j ACCEPT
 
   log_info "[+] IPTABLES: Remote -> Local LAN Allow (All)"
   sudo iptables -A INPUT -s "$remote_lan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT

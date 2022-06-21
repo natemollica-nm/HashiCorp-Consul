@@ -27,13 +27,13 @@ addresses {
     https  = "0.0.0.0"
 }
 ports {
-    serf_lan  = 8301
-    serf_wan  = 8302
-    server    = 8300
-    http      = 8500
-    https     = 8501
-    grpc      = 8502
-    dns       = 8600
+    serf_lan          = 8301
+    serf_wan          = 8302
+    server            = 8300
+    http              = 8500
+    https             = 8501
+    grpc              = 8502
+    dns               = 8600
     sidecar_min_port  = 21000
     sidecar_max_port  = 21255
     expose_min_port   = 21500
@@ -44,6 +44,7 @@ bootstrap_expect = 3
 license_path = "/etc/consul.d/consul.hclic"
 
 enable_central_service_config = true
+
 config_entries {
     bootstrap = [
         {

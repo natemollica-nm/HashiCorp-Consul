@@ -3,11 +3,11 @@
 
 VAGRANTFILE_API_VERSION = "2"
 
-CONSUL_VERSION="1.11.6+ent"
+CONSUL_VERSION="1.11.5+ent"
 ENVOY_VERSION="1.20.2"
 LAN_IP_DC1="20.0.0"
-LAN_IP_DC2="20.1.0"
-WAN_IP="192.168.0"
+LAN_IP_DC2="30.0.0"
+WAN_IP="192.169.7"
 MAC_NETWORK_BRIDGE="en6: AX88179A"
 
 $router = <<-ROUTER
@@ -31,8 +31,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.vm.define "consul-cluster-router" do |router|
       router.vm.network "public_network", ip: "#{LAN_IP_DC1}.1", bridge: "#{MAC_NETWORK_BRIDGE}"
       router.vm.network "public_network", ip: "#{LAN_IP_DC2}.1", bridge: "#{MAC_NETWORK_BRIDGE}"
+      router.vm.network "public_network", ip: "#{WAN_IP}.1", bridge: "#{MAC_NETWORK_BRIDGE}"
       router.vm.provision "shell", inline: $router, run: "once"
-      router.vm.provision "shell", path: "scripts/vagrant-routing/ubuntu-router-configure.sh", run: "always"
+      router.vm.provision "shell", path: "scripts/vagrant-routing/configure-ubuntu-router", run: "always",
+        args: "'--local-lan-one' #{LAN_IP_DC1} '--local-lan-two' #{LAN_IP_DC2}"
       router.vm.provision :reload
     end
 
@@ -52,7 +54,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc1' '--certificate-authority' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul0.vm.hostname = "consul-dc1-server-0"
         consul0.vm.network "public_network", ip: "#{LAN_IP_DC1}.10", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul0.vm.network "public_network", ip: "#{WAN_IP}.100", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul0.vm.network "public_network", ip: "#{WAN_IP}.110", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul0.vm.provision "shell", inline: $node, run: "once"
         consul0.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul0.vm.network "forwarded_port", guest: 8500, host: 8500, protocol: "tcp"
@@ -67,7 +69,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc1' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul1.vm.hostname = "consul-dc1-server-1"
         consul1.vm.network "public_network", ip: "#{LAN_IP_DC1}.20", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul1.vm.network "public_network", ip: "#{WAN_IP}.150", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul1.vm.network "public_network", ip: "#{WAN_IP}.120", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul1.vm.provision "shell", inline: $node, run: "once"
         consul1.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul1.vm.provision "shell", path: "scripts/vagrant-routing/consul-node-routing.sh", run: "always",
@@ -81,7 +83,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc1' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul2.vm.hostname = "consul-dc1-server-2"
         consul2.vm.network "public_network", ip: "#{LAN_IP_DC1}.30", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul2.vm.network "public_network", ip: "#{WAN_IP}.160", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul2.vm.network "public_network", ip: "#{WAN_IP}.130", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul2.vm.provision "shell", inline: $node, run: "once"
         consul2.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul2.vm.provision "shell", path: "scripts/vagrant-routing/consul-node-routing.sh", run: "always",
@@ -95,7 +97,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc1' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul3.vm.hostname = "consul-dc1-server-3"
         consul3.vm.network "public_network", ip: "#{LAN_IP_DC1}.40", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul3.vm.network "public_network", ip: "#{WAN_IP}.165", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul3.vm.network "public_network", ip: "#{WAN_IP}.140", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul3.vm.provision "shell", inline: $node, run: "once"
         consul3.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul3.vm.provision "shell", path: "scripts/vagrant-routing/consul-node-routing.sh", run: "always",
@@ -109,7 +111,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc1' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         primary_mesh.vm.hostname = "consul-dc1-mesh-gw"
         primary_mesh.vm.network "public_network", ip: "#{LAN_IP_DC1}.55", bridge: "#{MAC_NETWORK_BRIDGE}"
-        primary_mesh.vm.network "public_network", ip: "#{WAN_IP}.155", bridge: "#{MAC_NETWORK_BRIDGE}"
+        primary_mesh.vm.network "public_network", ip: "#{WAN_IP}.150", bridge: "#{MAC_NETWORK_BRIDGE}"
         primary_mesh.vm.provision "shell", inline: $node, run: "once"
         primary_mesh.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         primary_mesh.vm.network "forwarded_port", guest: 19000, host: 19001, protocol: "tcp"
@@ -152,7 +154,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc2' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul20.vm.hostname = "consul-dc2-server-0"
         consul20.vm.network "public_network", ip: "#{LAN_IP_DC2}.10", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul20.vm.network "public_network", ip: "#{WAN_IP}.170", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul20.vm.network "public_network", ip: "#{WAN_IP}.210", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul20.vm.provision "shell", inline: $node, run: "once"
         consul20.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul20.vm.network "forwarded_port", guest: 8500, host: 9500, protocol: "tcp"
@@ -167,7 +169,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc2' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul21.vm.hostname = "consul-dc2-server-1"
         consul21.vm.network "public_network", ip: "#{LAN_IP_DC2}.20", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul21.vm.network "public_network", ip: "#{WAN_IP}.180", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul21.vm.network "public_network", ip: "#{WAN_IP}.220", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul21.vm.provision "shell", inline: $node, run: "once"
         consul21.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul21.vm.provision "shell", path: "scripts/vagrant-routing/consul-node-routing.sh", run: "always",
@@ -181,7 +183,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc2' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul22.vm.hostname = "consul-dc2-server-2"
         consul22.vm.network "public_network", ip: "#{LAN_IP_DC2}.30", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul22.vm.network "public_network", ip: "#{WAN_IP}.190", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul22.vm.network "public_network", ip: "#{WAN_IP}.230", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul22.vm.provision "shell", inline: $node, run: "once"
         consul22.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul22.vm.provision "shell", path: "scripts/vagrant-routing/consul-node-routing.sh", run: "always",
@@ -195,7 +197,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc2' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
         consul23.vm.hostname = "consul-dc2-server-3"
         consul23.vm.network "public_network", ip: "#{LAN_IP_DC2}.40", bridge: "#{MAC_NETWORK_BRIDGE}"
-        consul23.vm.network "public_network", ip: "#{WAN_IP}.195", bridge: "#{MAC_NETWORK_BRIDGE}"
+        consul23.vm.network "public_network", ip: "#{WAN_IP}.240", bridge: "#{MAC_NETWORK_BRIDGE}"
         consul23.vm.provision "shell", inline: $node, run: "once"
         consul23.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
         consul23.vm.provision "shell", path: "scripts/vagrant-routing/consul-node-routing.sh", run: "always",
@@ -209,7 +211,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
           args: "'--version' #{CONSUL_VERSION} '--datacenter' 'dc2' '--enable-acls' '--enable-consul-connect' '--envoy-version' #{ENVOY_VERSION} '--set-gossip-encryption' '--set-rpc-encryption'"
       secondary_mesh.vm.hostname = "consul-dc2-mesh-gw"
       secondary_mesh.vm.network "public_network", ip: "#{LAN_IP_DC2}.55", bridge: "#{MAC_NETWORK_BRIDGE}"
-      secondary_mesh.vm.network "public_network", ip: "#{WAN_IP}.185", bridge: "#{MAC_NETWORK_BRIDGE}"
+      secondary_mesh.vm.network "public_network", ip: "#{WAN_IP}.250", bridge: "#{MAC_NETWORK_BRIDGE}"
       secondary_mesh.vm.provision "shell", inline: $node, run: "once"
       secondary_mesh.vm.provision "shell", path: "scripts/install-dnsmasq/install-dnsmasq", run: "once"
       secondary_mesh.vm.network "forwarded_port", guest: 19000, host: 19002, protocol: "tcp"
