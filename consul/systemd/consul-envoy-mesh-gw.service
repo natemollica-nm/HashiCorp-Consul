@@ -1,0 +1,27 @@
+[Unit]
+Description="HashiCorp Consul-Envoy - Mesh GW Connect Service"
+Documentation=https://www.consul.io/docs/connect/proxies/envoy
+Requires=network-online.target consul.service
+After=network-online.target consul.service
+
+[Service]
+Type=notify
+User=vagrant
+Group=vagrant
+ExecStart=/bin/consul connect envoy \
+            -gateway=mesh \
+            -expose-servers \
+            -register \
+            -service "mesh-gateway-${DATACENTER}" \
+            -address "{{ GetInterfaceIP \"eth1\" }}:8443" \
+            -wan-address "{{ GetInterfaceIP \"eth2\" }}:8443" \
+            -admin-bind 0.0.0.0:19000 \
+            -bind-address "mesh-gateway-${DATACENTER}={{ GetInterfaceIP \"eth1\" }}:8443"
+ExecReload=/bin/kill --signal HUP $MAINPID
+KillMode=process
+KillSignal=SIGTERM
+Restart=on-failure
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

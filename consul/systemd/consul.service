@@ -1,0 +1,22 @@
+[Unit]
+Description="HashiCorp Consul - A service mesh solution"
+Documentation=https://www.consul.io/
+Requires=network-online.target
+After=network-online.target
+ConditionFileNotEmpty=/etc/consul.d/consul.hcl
+
+[Service]
+Type=notify
+User=consul
+Group=consul
+ExecStart=/bin/sh -c '/usr/local/bin/consul agent -node $HOSTNAME -datacenter $DATACENTER \
+    -retry-join consul-$DATCENTER-server-0 -retry-join consul-$DATCENTER-server-1 \
+    -retry-join consul-$DATACENTER-server-2 -retry-join-wan $ALT_DC -config-file /vagrant/consul/configs/server.hcl'
+ExecReload=/bin/kill --signal HUP $MAINPID
+KillMode=process
+KillSignal=SIGTERM
+Restart=on-failure
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -16,7 +16,7 @@ A 6-Node [Consul][a01] cluster ( inspired by [vagrant-consul-cluster][a16] ) for
 7. Knowledge of MacBook's usable network adapters for bridging VM network.
 
    ```zsh
-   user@macbook:~$ network setup -listallhardwareports
+   user@macbook:~$ networksetup -listallhardwareports
    ```
 9. Valid Consul Enterprise License if using Consul Enterprise.
 10. [Vagrant][a13] 1.9.1 or newer.
