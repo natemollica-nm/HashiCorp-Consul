@@ -1,0 +1,146 @@
+#!/bin/bash
+
+DATACENTER="${DATACENTER:=dc1}"
+## Cluster IP Information
+LAN_IP_PREFIX_DC1="10.0.0"
+LAN_IP_PREFIX_DC2="20.0.0"
+WAN_IP_PREFIX="192.169.7"
+
+function install_dependencies() {
+export DEBIAN_FRONTEND=noninteractive
+
+echo '[+] Updating apt package lists'
+sudo apt update 1>/dev/null
+
+echo '[+] Installing additional dependencies via apt'
+sudo --preserve-env=DEBIAN_FRONTEND \
+    apt install --yes 1>/dev/null \
+        dnsutils \
+        jq \
+        less \
+        moreutils \
+        net-tools \
+        rsync \
+        unzip \
+        vim \
+        curl \
+        libcap2-bin \
+        wget \
+        software-properties-common \
+        apt-transport-https \
+        ca-certificates \
+        iptables-persistent \
+    ;
+}
+
+function configure_host_iptables() {
+  local -r local_lan_net="$1"
+  local -r remote_lan_net="$2"
+  local -r wan_net="$3"
+
+  echo "[+] Disabling Ubuntu UFW...."
+  sudo ufw disable
+
+  echo "[+] Starting Consul Node iptables Configuration..."
+  sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  sudo iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+  echo "[+] IPTABLES: Vault Server LB/Bootstrapping - Port 8200 (TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8200 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8200 -j ACCEPT
+
+  echo "[+] IPTABLES: Vault Server Raft/Repl/Req FWD - Port 8201 (TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8201 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8201 -j ACCEPT
+
+  echo "[+] IPTABLES: Consul/Vault Ref Architecture - Port 7300 (TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 7300 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 7300 -j ACCEPT
+
+  echo "[+] IPTABLES: Consul/Vault Ref. LAN Gossip - Port 7301 (TCP/UDP)"
+  sudo iptables -A OUTPUT -p tcp --dport 7301 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 7301 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 7301 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 7301 -j ACCEPT
+
+  echo "[+] IPTABLES: Server RPC - Port 8300 (TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8300 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8300 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8300 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8300 -j ACCEPT
+
+  echo "[+] IPTABLES: LAN Serf - Port 8301 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8301 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8301 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8301 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8301 -j ACCEPT
+
+  echo "[+] IPTABLES: WAN Serf - Port 8302 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8302 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8302 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8302 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8302 -j ACCEPT
+
+  echo "[+] IPTABLES: Consul DNS - Port 8600 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8600 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8600 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8600 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8600 -j ACCEPT
+
+  echo "[+] IPTABLES: Consul HTTP - Port 8500 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8500 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8500 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8500 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8500 -j ACCEPT
+
+  echo "[+] IPTABLES: Consul HTTPS - Port 8501 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8501 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8501 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8501 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8501 -j ACCEPT
+
+  echo "[+] IPTABLES: Envoy gRPC - Port 8502 (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 8502 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 8502 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 8502 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 8502 -j ACCEPT
+
+  echo "[+] IPTABLES: Default TCP/UDP Inbound/Outbound Service Ports (UDP/TCP)"
+  sudo iptables -A OUTPUT -p tcp --dport 1024:65535 -j ACCEPT
+  sudo iptables -A OUTPUT -p udp --dport 1024:65535 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport 1024:65535 -j ACCEPT
+  sudo iptables -A INPUT -p udp --dport 1024:65535 -j ACCEPT
+
+  echo "[+] IPTABLES: Remote -> Local LAN Allow (All)"
+  sudo iptables -A INPUT -s "$remote_lan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
+  sudo iptables -A OUTPUT -s "$remote_lan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
+  sudo iptables -A INPUT -s "$local_lan_net.0/24" -d "$remote_lan_net.0/24" -j ACCEPT
+  sudo iptables -A OUTPUT -s "$local_lan_net.0/24" -d "$remote_lan_net.0/24" -j ACCEPT
+  sudo iptables -A INPUT -s "$wan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
+  sudo iptables -A OUTPUT -s "$wan_net.0/24" -d "$local_lan_net.0/24" -j ACCEPT
+  sudo iptables -A INPUT -s "$local_lan_net.0/24" -d "$wan_net.0/24" -j ACCEPT
+  sudo iptables -A OUTPUT -s "$local_lan_net.0/24" -d "$wan_net.0/24" -j ACCEPT
+
+  echo "[+] Saving iptables configurations...."
+  sudo echo -e 'y\ny\n' | sudo iptables-save
+}
+
+function add_hashicorp_apt_repo() {
+  arch=$( [ "$(uname -m)" = aarch64 ] && echo arm64 || echo amd64)
+  sudo curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+  sudo apt-add-repository "deb [arch=${arch}] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+}
+
+add_hashicorp_apt_repo
+install_dependencies
+case "$DATACENTER" in
+  dc1)
+    echo "PRIMARY (DC1): Configuring iptables LAN/WAN Consul Connections..."
+    configure_host_iptables "$LAN_IP_PREFIX_DC1" "$LAN_IP_PREFIX_DC2" "$WAN_IP_PREFIX"
+    ;;
+  dc2)
+    echo "SECONDARY (DC2): Configuring iptables LAN/WAN Consul Connections..."
+    configure_host_iptables "$LAN_IP_PREFIX_DC2" "$LAN_IP_PREFIX_DC1" "$WAN_IP_PREFIX"
+    ;;
+esac
+echo "+++++ Host OS Configuration Complete!"

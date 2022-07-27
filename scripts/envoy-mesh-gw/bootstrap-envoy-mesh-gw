@@ -1,0 +1,47 @@
+#!/bin/bash
+DATACENTER="${DATACENTER:=dc1}"
+TLS="${TLS:=false}"
+ACL="${ACL:=false}"
+
+mesh_tls=""
+mesh_acl=""
+
+if [[ ("$TLS" == "true") ]]; then
+  mesh_tls="-grpc-addr=\"https://127.0.0.1:8502\" -tls-server-name=consul-dc1-server-0 -ca-file=/etc/consul.d/tls/consul-agent-ca.pem -client-cert=/etc/consul.d/tls/${DATACENTER}-server-consul-0.pem -client-key=/etc/consul.d/tls/${DATACENTER}-server-consul-0-key.pem"
+fi
+
+if [[ ("$ACL" == "true") ]];then
+  mesh_acl="-token=$( sudo cat /vagrant/consul/acl/bootstrap )"
+fi
+
+consul_mesh_gw_service=""
+consul_mesh_gw_service=$( cat <<-SERVICE
+[Unit]
+Description="HashiCorp Consul-Envoy - Mesh GW Connect Service"
+Documentation=https://www.consul.io/docs/connect/proxies/envoy
+Requires=network-online.target consul.service
+After=network-online.target consul.service
+
+[Service]
+Type=notify
+User=vagrant
+Group=vagrant
+ExecStart=/usr/local/bin/consul connect envoy -gateway=mesh -expose-servers -register -service "mesh-gateway-${DATACENTER}" -address "{{ GetInterfaceIP \"eth1\" }}:8443" -wan-address "{{ GetInterfaceIP \"eth2\" }}:8443" -admin-bind 0.0.0.0:19000 -bind-address "mesh-gateway-${DATACENTER}={{ GetInterfaceIP \"eth1\" }}:8443" ${mesh_tls} ${mesh_acl} &
+ExecReload=/bin/kill --signal HUP $MAINPID
+KillMode=process
+KillSignal=SIGTERM
+Restart=on-failure
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+)
+
+echo -e "$consul_mesh_gw_service" | sudo tee /etc/systemd/system/consul-mesh-gw.service
+
+echo "Starting Primary DC Consul Envoy Mesh GW -- $HOSTNAME ($DATACENTER)"
+sudo chmod 0644 /etc/systemd/system/consul-mesh-gw.service
+sudo systemctl enable --now consul-mesh-gw.service
+sudo systemctl daemon-reload
+sudo systemctl start consul-mesh-gw

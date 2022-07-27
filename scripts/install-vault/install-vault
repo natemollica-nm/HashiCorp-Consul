@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+DATACENTER="${DATACENTER:=dc1}"
+VAULT_VERSION="${VAULT_VERSION:=1.11.0+ent}"
+VAULT_INIT_CFG="vault.hcl"
+VAULT_INIT_CLT="server.hcl"
+VAULT_INIT_SRV="client.hcl"
+
+function install_vault() {
+  echo "[+] Installing Vault v$VAULT_VERSION"
+  # Installs Vault System User and Configures vault.service systemd unit
+  # --> vault binary at /usr/bin/vault
+  # --> /usr/lib/systemd/system/vault.service
+  # --> vault:x:998:997::/home/vault:/bin/false
+  # --> Creates /opt/vault and /etc/vault.d directories
+  # --> Gives baseline vault.hcl and vault.env files in /etc/vault.d directory
+  sudo apt install vault-enterprise=${VAULT_VERSION}
+}
+
+function setup_directories() {
+  local -r dc="${1}"
+  
+  echo '[+] Configuring vault directories'
+  # create and manage permissions on directories
+  sudo mkdir --parents --mode=0755 \
+    "/etc/vault-agent.d/templates" \
+    "/etc/vault.d/tls" \
+    "/opt/vault" \
+    "/opt/vault/bin" \
+    "/opt/vault/data" \
+    ;
+  sudo chown --recursive "vault:vault" \
+    "/etc/vault-agent.d/templates" \
+    "/etc/vault.d" \
+    "/opt/vault" \
+    "/opt/vault/bin" \
+    "/opt/vault/data" \
+    ;
+  if [[ ("$HOSTNAME" == vault-$dc-server-*) ]]; then
+    echo "[+] Configuring host as Vault Server..."
+    sudo cp "/vagrant/vault/configs/$VAULT_INIT_SRV" "/etc/vault.d/$VAULT_INIT_CFG"
+  else
+    echo "[+] Configuring host as Vault Client..."
+    sudo cp "/vagrant/vault/configs/$VAULT_INIT_CLT" "/etc/vault.d/$VAULT_INIT_CFG"
+  fi
+}
+
+function install_systemd_file() {
+  systemd_file="$1"
+  echo "[+] Installing systemd file: $systemd_file"
+  sudo cp "/vagrant/vault/systemd/$systemd_file" /etc/systemd/system
+  sudo chmod 0664 "/etc/systemd/system/$systemd_file"
+  sudo systemctl enable --now "$systemd_file"
+}
+
+function install_utility_script() {
+  utility_script="$1"
+  utility_script_parent_dir="$2"
+  destination_filename="$utility_script"
+
+  echo "[+] Installing script $utility_script file as: $destination_filename"
+  sudo cp --verbose "/vagrant/scripts/$utility_script_parent_dir/$utility_script" "/usr/local/bin/$destination_filename"
+  sudo chown --recursive "vault:vault" "/usr/local/bin/$destination_filename"
+  sudo chmod 0755 "/usr/local/bin/$destination_filename"
+}
+
+install_vault
+# install_systemd_file vault-agent.service
+#echo "[+] Installing Vault agent templates file to: /etc/vault-agent.d/templates/"
+#sudo rsync -chavzP /tmp/packer_files/vault_agent_templates/ /etc/vault-agent.d/templates/
+# echo '[+] Configuring Vault-specific Datadog agent settings'
+# Allow Datadog agent to stream Vault audit logs and the like
+# sudo usermod -a -G vault dd-agent
+# sudo apt update
+# sudo apt install --yes engsys-vault-fastly-secret-engine

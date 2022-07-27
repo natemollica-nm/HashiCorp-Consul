@@ -1,319 +1,114 @@
 #!/bin/bash
-# OS System Defaults
-VAGRANT_DIR="/vagrant"
-VAGRANT_CONSUL_DIR="$VAGRANT_DIR/consul"
-SYSTEM_BIN_DIR="/usr/local/bin"
-DOWNLOAD_PACKAGE_PATH="/tmp/consul.zip"
-SOURCE_CONSUL_CONFIGS="$VAGRANT_CONSUL_DIR/configs"
-# Consul Installation Defaults
-CONSUL_USERNAME="consul"
-CONSUL_VERSION="1.12.2+ent"
+CONSUL_VERSION="${CONSUL_VERSION:=1.12.2+ent}"
+CONSUL_TEMPLATE_VERSION="${CONSUL_TEMPLATE_VERSION:=0.29.1}"
+ENVOY_VERSION="${ENVOY_VERSION:=1.20.2}"
+DATACENTER="${DATACENTER:=dc1}"
+DATACENTERS="${DATACENTERS:=1}"
+BOOTSTRAP="${BOOTSTRAP:=3}"
 CONSUL_CFG_DIR="/etc/consul.d"
-CONSUL_OP_DIR="/opt/consul"
-CONSUL_DATA_DIR="$CONSUL_OP_DIR/data"
-CONSUL_DEFAULT_DC="dc1"
-ENVOY_DEFAULT_VERSION="1.22.0"
-CONSUL_KEYGEN_OUT="$VAGRANT_CONSUL_DIR/gossip/key"
-CONSUL_TLS_DIR="$CONSUL_CFG_DIR/tls"
-CONSUL_ENT_LIC="$VAGRANT_CONSUL_DIR/enterprise-license/consul.hclic"
-## Cluster IP Information
-LAN_IP_PREFIX_DC1="20.0.0"
-WAN_IP_PREFIX="192.169.7"
-LAN_IP_PREFIX_DC2="30.0.0"
-declare -A server_ips=(
-  ["consul-dc1-server-0"]="$LAN_IP_PREFIX_DC1.10"
-  ["consul-dc1-server-1"]="$LAN_IP_PREFIX_DC1.20"
-  ["consul-dc1-server-2"]="$LAN_IP_PREFIX_DC1.30"
-  ["consul-dc1-server-3"]="$LAN_IP_PREFIX_DC1.40"
-  ["consul-dc1-mesh-gw"]="$LAN_IP_PREFIX_DC1.55"
-  ["consul-dc2-server-0"]="$LAN_IP_PREFIX_DC2.10"
-  ["consul-dc2-server-1"]="$LAN_IP_PREFIX_DC2.20"
-  ["consul-dc2-server-2"]="$LAN_IP_PREFIX_DC2.30"
-  ["consul-dc2-server-3"]="$LAN_IP_PREFIX_DC2.40"
-  ["consul-dc2-mesh-gw"]="$LAN_IP_PREFIX_DC2.55"
-)
-declare -A server_ips_wan=(
-  ["consul-dc1-server-0"]="$WAN_IP_PREFIX.110"
-  ["consul-dc1-server-1"]="$WAN_IP_PREFIX.120"
-  ["consul-dc1-server-2"]="$WAN_IP_PREFIX.130"
-  ["consul-dc1-server-3"]="$WAN_IP_PREFIX.140"
-  ["consul-dc1-mesh-gw"]="$WAN_IP_PREFIX.150"
-  ["consul-dc2-server-0"]="$WAN_IP_PREFIX.210"
-  ["consul-dc2-server-1"]="$WAN_IP_PREFIX.220"
-  ["consul-dc2-server-2"]="$WAN_IP_PREFIX.230"
-  ["consul-dc2-server-3"]="$WAN_IP_PREFIX.240"
-  ["consul-dc2-mesh-gw"]="$WAN_IP_PREFIX.250"
-)
-declare -A client_ips=(
-  ["consul-dc1-client-0"]="$LAN_IP_PREFIX_DC1.2"
-  ["consul-dc1-client-1"]="$LAN_IP_PREFIX_DC1.3"
-  ["consul-dc2-client-0"]="$LAN_IP_PREFIX_DC2.2"
-  ["consul-dc2-client-1"]="$LAN_IP_PREFIX_DC2.3"
-)
-declare -A client_ips_wan=(
-  ["consul-dc1-client-0"]="$WAN_IP_PREFIX.200"
-  ["consul-dc1-client-1"]="$WAN_IP_PREFIX.201"
-  ["consul-dc2-client-0"]="$WAN_IP_PREFIX.202"
-  ["consul-dc2-client-1"]="$WAN_IP_PREFIX.203"
-)
+CONSUL_INIT_CFG="consul.hcl" # Centralized agent config file name / used for systemd unit (distinguish between server and client)
+CONSUL_INIT_CLT="client.hcl" # If server detected use this config
+CONSUL_INIT_SRV="server.hcl" # If client detected use this config
+ALT_DC=""
+if [[ ("$DATACENTER" == "dc1") ]]; then ALT_DC="dc2"; fi
+if [[ ("$DATACENTER" == "dc2") ]]; then ALT_DC="dc1"; fi
 
-function print_usage {
-  echo
-  echo "Usage: install-consul [OPTIONS]"
-  echo
-  echo "This script can be used to install Consul and its dependencies. This script has been tested with Vagrant hashicorp/bionic64 image."
-  echo
-  echo "Options:"
-  echo
-  echo -e "  --version\t\t\t  The version of Consul to install. Optional. Default: $CONSUL_VERSION."
-  echo -e "  --datacenter\t\t\t  The name Consul server/client Datacenter. Provides appropriate modifications based on DC. Optional. Default: $CONSUL_DEFAULT_DC"
-  echo -e "  --set-gossip-encryption\t  Bootstraps a new Gossip Encryption key if using consul-dc1-server-0. Updates consul.hcl configuration file with latest Gossip Encryption key."
-  echo -e "  --enable-acls\t\t\t Applies default Consul ACL Allow All consul.hcl configuration entry to allow for initial ACL bootstrapping. Optional. Default: ACL Allow All Policy"
-  echo -e "  --set-rpc-encryption\t\t  Bootstraps and initializes Consul local CA (consul-dc1-server-0 only). Generates server, client, and cli certificates for Primary and Secondary DCs. Applies applicable consul.hcl configuration stanza prior to initial agent start. Optional. "
-  echo -e "  --enable-consul-connect\t  Applies the Consul Connect enabled stanza to the clients consul.hcl configuration prior to initial agent start (bootstraps Connect). Optional. "
-  echo -e "  --enable-primary-mesh-gateway\t  Applies Consul Connect Configuration stanza modifications for client to act as Consul Envoy Primary Mesh GW (i.e., enable WAN federation). Optional. "
-  echo -e "  --enable-secondary-mesh-gateway Applies Consul Connect Configuration stanza modifications for client to act as Secondary DC Consul Envoy Secondary Mesh GW (i.e., enable WAN Fed, set Primary DC, sets Primary DC Mesh GW IP and Port Information). Optional. "
-  echo
-  echo "Examples:"
-  echo
-  echo "  Install Consul Enterprise v1.11.5 with no Security Standards enabled/configured:"
-  echo "    install-consul --version 1.11.5+ent --datacenter dc1"
-  echo
-  echo "  Install Consul Standard v1.10.9 with Consul Connect Enabled and no Security Standards enabled/configured:"
-  echo "    install-consul --version 1.10.9 --datacenter dc1 --enable-consul-connect"
-  echo
-  echo "  Install Consul Enterprise v1.12.1 with Gossip/TLS Encryption, Connect, and Primary Mesh GW configurations enabled."
-  echo "    install-consul --version 1.12.1+ent --datacenter dc1 --enable-consul-connect --enable-primary-mesh-gateway --set-gossip-encryption --set-rpc-encryption"
-  echo
-  echo "  Install Consul Standard v1.12.1 with Gossip/TLS Encryption, Connect, and Secondary Mesh GW configurations enabled. (Requires a Primary Mesh GW configured on alternate DC)."
-  echo "    install-consul --version 1.12.1 --datacenter dc1 --enable-consul-connect --enable-primary-mesh-gateway --set-gossip-encryption --set-rpc-encryption"
-  echo
-}
-
-function log {
-  local -r level="$1"
-  local -r message="$2"
-  local -r timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-  >&2 echo -e "${timestamp} [${level}] [$SCRIPT_NAME] ${message}"
-}
-
-function log_info {
-  local -r message="$1"
-  log "INFO" "$message"
-}
-
-function log_warn {
-  local -r message="$1"
-  log "WARN" "$message"
-}
-
-function log_error {
-  local -r message="$1"
-  log "ERROR" "$message"
-}
-
-function assert_not_empty {
-  local -r arg_name="$1"
-  local -r arg_value="$2"
-
-  if [[ -z "$arg_value" ]]; then
-    log_error "The value for '$arg_name' cannot be empty"
-    print_usage
-    exit 1
-  fi
-}
-
-# A retry function that attempts to run a command a number of times and returns the output
-function retry {
-  local -r cmd="$1"
-  local -r description="$2"
-
-  for i in $(seq 1 5); do
-    log_info "Attempt: $i -- $description"
-
-    # The boolean operations with the exit status are there to temporarily circumvent the "set -e" at the
-    # beginning of this script which exits the script immediately for error status while not losing the exit status code
-    output=$(eval "$cmd") && exit_status=0 || exit_status=$?
-    log_info "$output"
-    if [[ $exit_status -eq 0 ]]; then
-      echo "$output"
-      return
-    fi
-    log_warn "$description failed. Will sleep for 10 seconds and try again."
-    sleep 10
-  done;
-
-  log_error "$description failed after 5 attempts."
-  exit $exit_status
-}
-
-function version_gt {
+function version_gt() {
   test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
 }
 
-function get_ip_from_hostname {
-  local -r name="$1"
-  dig "$name" +short | head -n 1
-}
-
-function get_host_ip {
-  eth_adapter="$1"
-  if [[ ($eth_adapter == null) || ($eth_adapter == "") ]];then  eth_adapter="eth1"; fi
-  ip -4 addr show "$eth_adapter" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
-}
-
-function update_consul_hcl {
+function update_consul_hcl() {
   local config_update="$1"
   local -r update_title="$2"
   local -r consul_hcl_path="$CONSUL_CFG_DIR/consul.hcl"
 
-  log_info "CONFIG UPDATE: $update_title ------> $consul_hcl_path"
+  echo "CONFIG UPDATE: $update_title ------> $consul_hcl_path"
   echo -ne "\n" | sudo tee --append "$consul_hcl_path"
   echo -e "$config_update" | sudo tee --append "$consul_hcl_path"
 }
 
-function user_exists {
-  local -r username="$1"
-  id "$username" >/dev/null 2>&1
+function create_consul_user() {
+    username="$1"
+    if ! getent passwd "$username" >/dev/null ; then
+        sudo /usr/sbin/adduser --system "$username"
+        sudo /usr/sbin/groupadd --force --system "$username"
+        sudo /usr/sbin/usermod --gid "$username" "$username"
+    fi
 }
 
-function create_consul_user {
-  local -r username="$1"
+function setup_directories() {
+  local -r dc="${1}"
 
-  if user_exists "$username"; then
-    echo "User $username already exists. Will not create again."
+  echo '[+] Configuring consul directories'
+  # create and manage permissions on directories
+  sudo mkdir --parents --mode=0755 \
+    "/etc/consul.d/tls" \
+    "/etc/consul-template.d" \
+    "/opt/consul" \
+    "/opt/consul/bin" \
+    "/opt/consul/data" \
+    ;
+  sudo chown --recursive "consul:consul" \
+    "/etc/consul.d" \
+    "/etc/consul-template.d" \
+    "/opt/consul" \
+    "/opt/consul/bin" \
+    "/opt/consul/data" \
+    ;
+  if [[ ("$HOSTNAME" == consul-$dc-server-*) ]]; then
+    echo "[+] Configuring host as Consul Server..."
+    sudo cp "/vagrant/consul/configs/$CONSUL_INIT_SRV" "/etc/consul.d/$CONSUL_INIT_CFG"
   else
-    log_info "Creating user named $username"
-    sudo useradd "$username" --system --home "$CONSUL_CFG_DIR"
+    echo "[+] Configuring host as Consul Client..."
+    sudo cp "/vagrant/consul/configs/$CONSUL_INIT_CLT" "/etc/consul.d/$CONSUL_INIT_CFG"
   fi
 }
 
-function create_consul_install_paths {
-  local -r username="$1"
+function install_consul() {
+  local arch=""
+  arch=$( [ "$(uname -m)" = aarch64 ] && echo arm64 || echo amd64)
+  echo "[+] Installing Consul v$CONSUL_VERSION"
+  curl \
+    --silent "https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_${arch}.zip" \
+    --output '/tmp/consul.zip' \
+    --location \
+    --fail
+  unzip \
+    -o "/tmp/consul.zip" \
+    -d /tmp 1>/dev/null
 
-  log_info "[+] Creating Consul specific directories - ($CONSUL_CFG_DIR | $CONSUL_OP_DIR | $CONSUL_DATA_DIR)"
-  # Make Consul Specific Directories
-  sudo mkdir --parents "$CONSUL_CFG_DIR"
-  sudo mkdir --parents "$CONSUL_OP_DIR"
-  sudo mkdir --parents "$CONSUL_OP_DIR/bin"
-  sudo mkdir --parents "$CONSUL_DATA_DIR"
-  log_info "[+] Setting consul user ownership rights to $CONSUL_CFG_DIR and $CONSUL_OP_DIR"
-  sudo chown --recursive "$username:$username" "$CONSUL_CFG_DIR"
-  sudo chown --recursive "$username:$username" "$CONSUL_OP_DIR"
+  echo "[+] Moving consul binary to /usr/bin/consul"
+  sudo mv "/tmp/consul" "/usr/bin/consul"
+  sudo chown "consul:consul" "/usr/bin/consul"
+  sudo chmod a+x "/usr/bin/consul"
 }
 
-function install_dependencies {
-  # Add the official HashiCorp Linux repository
-  log_info "[+] Installing dependencies and tools (curl|wget|software-props-common|jq|unzip|traceroute|nmap|socat|netcat)...."
-  apt-get -y -q install curl wget software-properties-common jq unzip traceroute nmap socat netcat
+function install_consul_template() {
+  local arch=""
+  arch=$( [ "$(uname -m)" = aarch64 ] && echo arm64 || echo amd64)
+  echo "[+] Installing Consul-Template v$CONSUL_TEMPLATE_VERSION"
+  curl --silent "https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_${arch}.zip" --output '/tmp/consul-template.zip'  --location --fail
+  unzip -o "/tmp/consul-template.zip" -d /tmp 1>/dev/null
 
-  log_info "[+] Adding HashiCorp apt repo..."
-  curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
-  apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-
-  log_info "[+] Updating apt repo..."
-  sudo apt-get update
+  echo "[+] Moving consul binary to /usr/bin/consul-template"
+  sudo mv "/tmp/consul-template" "/usr/bin/consul-template"
+  sudo chown "consul:consul" "/usr/bin/consul-template"
+  sudo chmod a+x "/usr/bin/consul-template"
 }
 
-function fetch_binary {
-  local -r version="$1"
-  local download_url="$2"
-
-  local cpu_arch
-  cpu_arch="$(uname -m)"
-  local binary_arch=""
-  case "$cpu_arch" in
-    x86_64)
-      binary_arch="amd64"
-      ;;
-    x86)
-      binary_arch="386"
-      ;;
-    arm64|aarch64)
-      binary_arch="arm64"
-      ;;
-    arm*)
-      # The following info is taken from https://www.consul.io/downloads
-      #
-      # Note for ARM users:
-      #
-      # Use Armelv5 for all 32-bit armel systems
-      # Use Armhfv6 for all armhf systems with v6+ architecture
-      # Use Arm64 for all v8 64-bit architectures
-      # The following commands can help determine the right version for your system:
-      #
-      # $ uname -m
-      # $ readelf -a /proc/self/exe | grep -q -c Tag_ABI_VFP_args && echo "armhf" || echo "armel"
-      #
-      local vfp_tag
-      vfp_tag="$(readelf -a /proc/self/exe | grep -q -c Tag_ABI_VFP_args)"
-      if [[ -z $vfp_tag  ]]; then
-        binary_arch="armelv5"
-      else
-        binary_arch="armhfv6"
-      fi
-      ;;
-    *)
-      log_error "CPU architecture $cpu_arch is not a supported by Consul."
-      exit 1
-      ;;
-    esac
-
-  # Set Consul Binary download path from ---> version and binary_arch determinations
-  download_url="https://releases.hashicorp.com/consul/${version}/consul_${version}_linux_${binary_arch}.zip"
-
-  retry \
-    "curl -o '$DOWNLOAD_PACKAGE_PATH' '$download_url' --location --silent --fail --show-error" \
-    "Downloading Consul to $DOWNLOAD_PACKAGE_PATH"
-}
-
-function install_binary {
-  local -r username="$1"
-  local -r datacenter="$2"
-  local -r consul_server_config="$CONSUL_CFG_DIR/consul.hcl"
-  local -r consul_ent_license="$CONSUL_CFG_DIR/consul.hclic"
-  local -r consul_op_bin_dir="$CONSUL_OP_DIR/bin"
-
-  log_info "[+] Copying Consul Enterprise License ($CONSUL_ENT_LIC --> $consul_ent_license)"
-  cp "$CONSUL_ENT_LIC" "$consul_ent_license"
-
-  log_info "[+] Copying Consul Server Configurations to $consul_server_config"
-  cp "$SOURCE_CONSUL_CONFIGS/$datacenter/$HOSTNAME.hcl" "$consul_server_config"
-  sudo chmod 0755 "$consul_server_config"
-
-  unzip -d /tmp "$DOWNLOAD_PACKAGE_PATH"
-
-  log_info "[+] Moving Consul binary to $SYSTEM_BIN_DIR"
-  sudo cp "/tmp/consul" "$consul_op_bin_dir/consul"
-  sudo mv "/tmp/consul" "$SYSTEM_BIN_DIR"
-  sudo chown "$username:$username" "$consul_op_bin_dir/consul"
-  sudo chmod a+x "$consul_op_bin_dir/consul"
-
-  local -r symlink_path="$SYSTEM_BIN_DIR/consul"
-  if [[ -f "$symlink_path" ]]; then
-    log_info "[+] Symlink $symlink_path already exists. Will not add again."
-  else
-    log_info "[+] Adding symlink to $SYSTEM_BIN_DIR in $symlink_path"
-    sudo ln -s "$consul_op_bin_dir" "$symlink_path"
-  fi
-}
-
-function enable_gossip_encryption {
-  local keygen_file="$1"
+function enable_gossip_encryption() {
+  local keygen_file="/vagrant/consul/gossip/key"
   local gossip_key=""
   gossip_key="$( sudo cat "$keygen_file")"
 
   update_consul_hcl "encrypt = \"$gossip_key\"" "Gossip Encryption Key"
 }
 
-function run_consul_keygen {
-  local -r keygen_out="$1"
-  local -r datacenter="$2"
+function run_consul_keygen() {
+  local keygen_out="/vagrant/consul/gossip/key"
 
-  local -r consul_server_config="$CONSUL_CFG_DIR/consul.hcl"
   local gossip_key;
-
-  log_info "[+] Generating Gossip Encryption key..."
+  echo "[+] Generating Gossip Encryption key..."
   # Generate Gossip Encryption key
   if [[ -f "$keygen_out" ]]; then sudo rm -rf "$keygen_out"; fi
   sudo touch "$keygen_out"
@@ -321,254 +116,27 @@ function run_consul_keygen {
   update_encryption_key_conf "$keygen_out"
 }
 
-function install_envoy {
+function install_envoy() {
   local -r version="$1"
-  if [[ -z "$version" ]]; then version="$ENVOY_DEFAULT_VERSION"; fi
-  local cpu_arch
-  cpu_arch="$(uname -m)"
-  local binary_arch=""
-  case "$cpu_arch" in
-    x86_64)
-      binary_arch="amd64"
-      ;;
-    x86)
-      binary_arch="386"
-      ;;
-    arm64|aarch64)
-      binary_arch="arm64"
-      ;;
-    arm*)
-      # The following info is taken from https://www.consul.io/downloads
-      #
-      # Note for ARM users:
-      #
-      # Use Armelv5 for all 32-bit armel systems
-      # Use Armhfv6 for all armhf systems with v6+ architecture
-      # Use Arm64 for all v8 64-bit architectures
-      # The following commands can help determine the right version for your system:
-      #
-      # $ uname -m
-      # $ readelf -a /proc/self/exe | grep -q -c Tag_ABI_VFP_args && echo "armhf" || echo "armel"
-      #
-      local vfp_tag
-      vfp_tag="$(readelf -a /proc/self/exe | grep -q -c Tag_ABI_VFP_args)"
-      if [[ -z $vfp_tag  ]]; then
-        binary_arch="armelv5"
-      else
-        binary_arch="armhfv6"
-      fi
-      ;;
-    *)
-      log_error "CPU architecture $cpu_arch is not a supported by Consul."
-      exit 1
-      ;;
-  esac
+  local arch=""
+  arch=$( [ "$(uname -m)" = aarch64 ] && echo arm64 || echo amd64)
 
-  log_info "[+] Installing Envoy Version $version"
-  wget "https://archive.tetratelabs.io/envoy/download/v${version}/envoy-v${version}-linux-${binary_arch}.tar.xz"
-  tar -xf "envoy-v${version}-linux-${binary_arch}.tar.xz"
-  sudo chmod +x "envoy-v${version}-linux-${binary_arch}/bin/envoy"
-  sudo mv "envoy-v${version}-linux-${binary_arch}/bin/envoy" "/usr/bin/envoy"
-  sudo rm -rf "envoy-v${version}-linux-${binary_arch}.tar.xz" "envoy-v${version}-linux-${binary_arch}"
+  echo "[+] Installing Envoy Version v$version"
+  wget --quiet "https://archive.tetratelabs.io/envoy/download/v${version}/envoy-v${version}-linux-${arch}.tar.xz" 1>/dev/null
+  sudo tar -xf "envoy-v${version}-linux-${arch}.tar.xz" 1>/dev/null
+  sudo chmod a+x "envoy-v${version}-linux-${arch}/bin/envoy"
+  sudo mv "envoy-v${version}-linux-${arch}/bin/envoy" "/usr/bin/envoy"
+  sudo rm -rf "envoy-v${version}-linux-${arch}.tar.xz" "envoy-v${version}-linux-${arch}"
 }
 
-function create_cluster_cert {
-  local -r node_name="$1"
-  local -r srvr_or_clnt_or_cli="$2"
-  local -r dc="$3"
-  local eth0_ip="10.0.2.15"
-  local vagrant_home_ip="127.0.2.1"
-  local envoy_grpc_ip="192.0.2.2"
-
-  if [[ "$srvr_or_clnt_or_cli" == "server" ]]; then
-    consul tls cert create -server -node "$node_name" -dc="$dc" \
-      -additional-dnsname="*.server.dc1.consul" -additional-dnsname="*.server.dc2.consul" \
-      -additional-dnsname="*.dc1.consul" -additional-dnsname="*.dc2.consul" \
-      -additional-dnsname="consul-dc1-server-0" -additional-dnsname="consul-dc1-server-1" -additional-dnsname="consul-dc1-server-2" \
-      -additional-dnsname="consul-dc2-server-0" -additional-dnsname="consul-dc2-server-1" -additional-dnsname="consul-dc2-server-2" \
-      -additional-dnsname="consul-dc1-server-3" -additional-dnsname="consul-dc2-server-3" -additional-dnsname="consul-dc1-mesh-gw" \
-      -additional-dnsname="consul-dc2-mesh-gw" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-0"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-0"]}" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-1"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-1"]}" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-2"]}" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-3"]}" \
-      -additional-ipaddress="${server_ips["consul-dc1-mesh-gw"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-mesh-gw"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-0"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-0"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-1"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-1"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-2"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-3"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-mesh-gw"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-mesh-gw"]}" \
-      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" \
-      -additional-ipaddress="10.0.2.2" \
-      && sleep 1
-  fi
-  if [[ "$srvr_or_clnt_or_cli" == "client" ]]; then
-  consul tls cert create -client -dc="$dc" \
-    -additional-dnsname="*.server.dc1.consul" -additional-dnsname="*.server.dc2.consul" \
-    -additional-dnsname="*.dc1.consul" -additional-dnsname="*.dc2.consul" \
-    -additional-dnsname="consul-dc1-client-0" -additional-dnsname="consul-dc1-client-1" \
-    -additional-dnsname="consul-dc2-client-0" -additional-dnsname="consul-dc2-client-1" \
-    -additional-ipaddress="${client_ips["consul-dc1-client-0"]}" -additional-ipaddress="${client_ips_wan["consul-dc1-client-0"]}" \
-    -additional-ipaddress="${client_ips["consul-dc2-client-1"]}" -additional-ipaddress="${client_ips_wan["consul-dc2-client-1"]}" \
-    -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" \
-    && sleep 1
-  fi
-  if [[ "$srvr_or_clnt_or_cli" == "cli" ]]; then
-  consul tls cert create -cli --dc="$dc" \
-      -additional-dnsname="*.server.dc1.consul" -additional-dnsname="*.server.dc2.consul" \
-      -additional-dnsname="*.dc1.consul" -additional-dnsname="*.dc2.consul" \
-      -additional-dnsname="consul-dc1-server-0" -additional-dnsname="consul-dc1-server-1" -additional-dnsname="consul-dc1-server-2" \
-      -additional-dnsname="consul-dc2-server-0" -additional-dnsname="consul-dc2-server-1" -additional-dnsname="consul-dc2-server-2" \
-      -additional-dnsname="consul-dc1-server-3" -additional-dnsname="consul-dc2-server-3" -additional-dnsname="consul-dc1-mesh-gw" \
-      -additional-dnsname="consul-dc2-mesh-gw" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-0"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-0"]}" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-1"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-1"]}" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-2"]}" \
-      -additional-ipaddress="${server_ips["consul-dc1-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc1-server-3"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-0"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-0"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-1"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-1"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-2"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-2"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-server-3"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-server-3"]}" \
-      -additional-ipaddress="${server_ips["consul-dc2-mesh-gw"]}" -additional-ipaddress="${server_ips_wan["consul-dc2-mesh-gw"]}" \
-      -additional-ipaddress="$eth0_ip" -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$envoy_grpc_ip" \
-      -additional-ipaddress="10.0.2.2"\
-      && sleep 1
-  fi
+function update_bootstrap_expect() {
+    bootstrap_expect="bootstrap_expect = $BOOTSTRAP"
+    update_consul_hcl "$bootstrap_expect" "Setting bootstrap_expect = $BOOTSTRAP"
 }
 
-function create_tls_certificates {
-  local -r datacenter="$1"
-  local datacenter_secondary=""
-  [[ "$datacenter" == "dc1" ]] && datacenter_secondary="dc2"
-  [[ "$datacenter" == "dc2" ]] && datacenter_secondary="dc1"
+function enable_consul_connect() {
 
-  local -r ca_public_cert="consul-agent-ca.pem"
-  local -r ca_private_cert="consul-agent-ca-key.pem"
-  local -r consul_srvr_pub_cert="$datacenter-server-consul-0.pem"
-  local -r consul_srvr_private_cert="$datacenter-server-consul-0-key.pem"
-  local -r consul_srvr_pub_cert_sec="$datacenter_secondary-server-consul-0.pem"
-  local -r consul_srvr_private_cert_sec="$datacenter_secondary-server-consul-0-key.pem"
-  local -r consul_clnt_pub_cert="$datacenter-client-consul-0.pem"
-  local -r consul_clnt_private_cert="$datacenter-client-consul-0-key.pem"
-  local -r consul_clnt_pub_cert_sec="$datacenter_secondary-client-consul-0.pem"
-  local -r consul_clnt_private_cert_sec="$datacenter_secondary-client-consul-0-key.pem"
-  local -r consul_https_cli_pub_key="$datacenter-cli-consul-0.pem"
-  local -r consul_https_cli_private_key="$datacenter-cli-consul-0-key.pem"
-  local -r consul_https_cli_pub_key_sec="$datacenter_secondary-cli-consul-0.pem"
-  local -r consul_https_cli_private_key_sec="$datacenter_secondary-cli-consul-0-key.pem"
-
-  log_info "[+] Initializing Consul Certificate Authority: $HOSTNAME"
-  consul tls ca create && sleep 3
-  [[ -f $ca_public_cert ]] || log_error "Failed to create $ca_public_cert"
-  [[ -f $ca_private_cert ]] || log_error "Failed to create $ca_private_cert"
-
-  log_info "[+] Primary DC --> Creating Consul Server certs (DC: $datacenter)"
-  create_cluster_cert "$HOSTNAME" "server" "$datacenter"
-  [[ -f $consul_srvr_pub_cert ]] || log_error "Failed to create $consul_srvr_pub_cert"
-  [[ -f $consul_srvr_private_cert ]] || log_error "Failed to create $consul_srvr_private_cert"
-
-  log_info "[+] Secondary DC --> Creating Consul Server certs - (DC: $datacenter_secondary)"
-  create_cluster_cert "$HOSTNAME" "server" "$datacenter_secondary"
-  [[ -f $consul_srvr_pub_cert_sec ]] || log_error "Failed to create $consul_srvr_pub_cert_sec"
-  [[ -f $consul_srvr_private_cert_sec ]] || log_error "Failed to create $consul_srvr_private_cert_sec"
-
-  log_info "[+] Primary DC --> Creating Consul Client certs (DC: $datacenter)"
-  create_cluster_cert "" "client" "$datacenter"
-  [[ -f $consul_clnt_pub_cert ]] || log_error "Failed to create $consul_clnt_pub_cert"
-  [[ -f $consul_clnt_private_cert ]] || log_error "Failed to create $consul_clnt_private_cert"
-
-  log_info "[+] Secondary DC --> Creating Consul Client certs - (DC: $datacenter_secondary)"
-  create_cluster_cert "" "client" "$datacenter_secondary"
-  [[ -f $consul_clnt_pub_cert_sec ]] || log_error "Failed to create $consul_clnt_pub_cert_sec"
-  [[ -f $consul_clnt_private_cert_sec ]] || log_error "Failed to create $consul_clnt_private_cert_sec"
-
-  log_info "[+] Primary DC --> Creating Consul CLI certs - (DC: $datacenter)"
-  create_cluster_cert "" "cli" "$datacenter"
-  [[ -f $consul_https_cli_pub_key ]] || log_error "Failed to create $consul_https_cli_pub_key"
-  [[ -f $consul_https_cli_private_key ]] || log_error "Failed to create $consul_https_cli_private_key"
-
-  log_info "[+] Secondary DC --> Creating Consul CLI certs - (DC: $datacenter_secondary)"
-  create_cluster_cert "" "cli" "$datacenter_secondary"
-  [[ -f $consul_https_cli_pub_key_sec ]] || log_error "Failed to create $consul_https_cli_pub_key_sec"
-  [[ -f $consul_https_cli_private_key_sec ]] || log_error "Failed to create $consul_https_cli_private_key_sec"
-
-  log_info "Copying Consul TLS Certs to $VAGRANT_CONSUL_DIR/tls"
-  sudo chmod 0755 ./*.pem && \
-  sudo rm -rf "$VAGRANT_CONSUL_DIR/tls/*" && \
-  sudo cp ./*.pem "$VAGRANT_CONSUL_DIR/tls/" && \
-  sudo rm -rf ./*.pem
-}
-
-function configure_consul_agent_tls {
-  local dc="$1"
-  local svr_clnt="$2"
-  local tls_config=""
-  local svr_clnt_cfg=""
-
-  if [[ "$svr_clnt" == "client" ]]; then
-  svr_clnt_cfg=$( cat <<-CONFIG
-ca_file = "$CONSUL_TLS_DIR/consul-agent-ca.pem"
-
-auto_encrypt {
-    tls = true
-  }
-CONFIG
-)
-
-elif [[ "$svr_clnt" == "server" ]]; then
-  svr_clnt_cfg=$( cat <<-CONFIG
-
-ca_file = "$CONSUL_TLS_DIR/consul-agent-ca.pem"
-cert_file = "$CONSUL_TLS_DIR/$dc-$svr_clnt-consul-0.pem"
-key_file = "$CONSUL_TLS_DIR/$dc-$svr_clnt-consul-0-key.pem"
-
-auto_encrypt {
-    allow_tls = true
-  }
-CONFIG
-)
-
-  tls_config=$( cat <<-CONFIG
-
-verify_incoming = false
-verify_incoming_rpc = true
-verify_outgoing = true
-verify_server_hostname = true
-
-${svr_clnt_cfg}
-CONFIG
-)
-fi
-  update_consul_hcl "$tls_config" "[+] TLS Agent Configuration"
-}
-
-function set_tls_encryption {
-  local -r user="$1"
-  local -r dc="$2"
-  local datacenter_secondary=""
-  local svr_clnt=""
-
-  [[ "$dc" == "dc1" ]] && datacenter_secondary="dc2"
-  [[ "$dc" == "dc2" ]] && datacenter_secondary="dc1"
-  if [[ ("$HOSTNAME" == consul-$dc-server-*) || ("$HOSTNAME" == consul-$dc-mesh-gw) ]];then svr_clnt="server"; fi
-  if [[ ("$HOSTNAME" == consul-$dc-client-*) ]]; then svr_clnt="client"; fi
-
-  local -r tls_certs_source="$VAGRANT_CONSUL_DIR/tls"
-  log_info "[+] Creating TLS dir ($CONSUL_TLS_DIR)"
-  sudo mkdir -p "$CONSUL_TLS_DIR"
-
-  log_info "[+] Copying TLS certs: $tls_certs_source --> $CONSUL_TLS_DIR."
-  sudo cp $tls_certs_source/*.pem "$CONSUL_TLS_DIR" && \
-  sudo chown --recursive "$user:$user" "$CONSUL_TLS_DIR/" && \
-  sudo chmod 0755 $CONSUL_TLS_DIR/*
-
-  configure_consul_agent_tls "$dc" "$svr_clnt"
-}
-
-function enable_consul_connect {
-  local -r dc="$1"
-
-  log_info "[+] Enabling Consul Connect...."
+  echo "[+] Enabling Consul Connect...."
   local consul_connect_config=""
   consul_connect_config=$( cat <<-CONFIG
 
@@ -578,23 +146,38 @@ connect {
 CONFIG
 )
 
-  log_info "DC ($dc): CONNECT ENABLED: Updating consul.hcl with Consul Connect configuration...."
+  echo "DC ($dc): CONNECT ENABLED: Updating consul.hcl with Consul Connect configuration...."
   update_consul_hcl "$consul_connect_config" "DC ($dc): Consul-Connect Configuration"
 }
 
-function configure_envoy_mesh_gw {
-  local -r dc="$1"
-  local -r tls_enabled="$2"
-  local -r acl_enabled="$3"
-  local mesh_script="/vagrant/scripts/envoy-mesh-gw/bootstrap-envoy-mesh-gw.sh"
+function enable_consul_ui() {
+  local -r consul_ver="$1"
+  local ui_enable=""
 
-  sudo chmod a+x $mesh_script
-  /bin/sh -c "DATACENTER=$dc TLS=$tls_enabled ACL=$acl_enabled && ./$mesh_script"
+if version_gt "1.9.0" "$consul_ver"; then
+  ui_enable=$( cat <<-CONFIG
+
+ui = true
+CONFIG
+)
+else
+  ui_enable=$( cat <<-CONFIG
+
+ui_config {
+  enabled = true
+}
+CONFIG
+)
+fi
+
+
+  echo "[+] ACL: Updating consul.hcl with default UI config...."
+  update_consul_hcl "$ui_enable" "Consul UI Enablement"
 }
 
-function generate_bootstrap_token {
-  log_info "[+] $HOSTNAME: Generating ACL initial management token...."
-  local -r central_bootstrap="$VAGRANT_CONSUL_DIR/acl/bootstrap"
+function generate_bootstrap_token() {
+  echo "[+] $HOSTNAME: Generating ACL initial management token...."
+  local -r central_bootstrap="/vagrant/consul/acl/bootstrap"
   local uuid=""
 
   if [[ -f "$central_bootstrap" ]]; then sudo rm -rf "$central_bootstrap"; fi
@@ -603,21 +186,21 @@ function generate_bootstrap_token {
   echo "$uuid" | sudo tee "$central_bootstrap"
 }
 
-function enable_acls {
-  log_info "[+] Generating Default Consul ACL configuration stanza...."
-  local -r central_bootstrap="$VAGRANT_CONSUL_DIR/acl/bootstrap"
+function enable_acls() {
+  echo "[+] Generating Default Consul ACL configuration stanza...."
   local -r consul_ver="$1"
   local -r dc="$2"
-
-  local mgmt_token="initial_management"
   local rep_enable=""
+  local uuid=""
+  local -r central_bootstrap="/vagrant/consul/acl/bootstrap"
+  local mgmt_token="initial_management"
 
-  if version_gt "$consul_ver" "1.10.0"; then mgmt_token="master"; fi
-
+  if version_gt "1.10.0" "$consul_ver"; then mgmt_token="master"; fi
   if [[ ("$dc" == "dc2") ]]; then rep_enable="enable_token_replication = true"; fi
 
-  local uuid=""
+
   uuid="$( sudo cat "$central_bootstrap")"
+
   local consul_default_acl_config=""
   consul_default_acl_config=$( cat <<-CONFIG
 
@@ -627,7 +210,7 @@ acl {
   enable_token_persistence = true
   ${rep_enable}
   tokens {
-    default     = "$uuid
+    default     = "$uuid"
     $mgmt_token = "$uuid"
     replication = "$uuid"
   }
@@ -635,177 +218,121 @@ acl {
 CONFIG
 )
 
-  log_info "[+] ACL: Updating consul.hcl with default ACL allow all configuration...."
+  echo "[+] ACL: Updating consul.hcl with default ACL allow all configuration...."
   update_consul_hcl "$consul_default_acl_config" "Consul Default ACL"
 }
 
-function create_acl_replication_token {
-  log_info "[+] Generating Consul ACL replication configuration file...."
-  local -r repl_policy="$CONSUL_CFG_DIR/replication-policy.hcl"
+function bootstrap_consul_systemd_unit() {
+  local dc="$1"
+  local bootstrap=""
+  local wan_join=""
+  local svr_clnt=""
+if [[ ("$HOSTNAME" == consul-$dc-server-*) ]]; then
+  svr_clnt="-server"
+  bootstrap="-bootstrap-expect ${BOOTSTRAP}"
+fi
 
-  local replication_policy_rules=""
-  replication_policy_rules=$( cat <<-CONFIG
-acl = "write"
-operator = "write"
-service_prefix "" {
-  policy = "read"
-  intentions = "read"
-}
-CONFIG
+if [[ ("$DATACENTERS" -gt 1) ]]; then
+  wan_join=$( cat <<-RETRY_WAN
+-retry-join-wan consul-$ALT_DC-server-1 -retry-join-wan consul-$ALT_DC-server-2 \
+-retry-join-wan consul-$ALT_DC-server-3 -retry-join-wan consul-$ALT_DC-server-4
+RETRY_WAN
 )
+fi
 
-  log_info "[+] ACL: Creating replication policy hcl at $repl_policy...."
-  sudo touch $repl_policy && sudo chmod 0755 $repl_policy
-  echo -e "$replication_policy_rules" | sudo tee $repl_policy
-  consul acl policy create -name replication -rules @$repl_policy && sudo touch "$CONSUL_CFG_DIR/replication_token_info.txt" && \
-  consul acl token create -description "replication token" -policy-name replication > "$CONSUL_CFG_DIR/replication_token_info.txt"
-}
+(
+cat <<-EOF
+[Unit]
+Description=consul agent
+Requires=network-online.target
+After=network-online.target
+ConditionFileNotEmpty=/etc/consul.d/$CONSUL_INIT_CFG
 
-function update_hosts_file {
-  local -r datacenter="$1"
+[Service]
+EnvironmentFile=-/etc/consul.d/consul.env
+Type=notify
+User=consul
+Group=consul
+Restart=on-failure
+ExecStart=/usr/bin/consul agent ${svr_clnt} \
+  ${bootstrap} \
+  -node ${HOSTNAME} -datacenter $dc \
+  -retry-join consul-$dc-server-0 -retry-join consul-$dc-server-1 \
+  -retry-join consul-$dc-server-2 -retry-join consul-$dc-server-3 \
+  -retry-join consul-$dc-server-4 -retry-join-wan consul-$ALT_DC-server-0 \
+  ${wan_join} \
+  -config-dir=/etc/consul.d
+ExecReload=/bin/kill -HUP $MAINPID
 
-  local dc1_hosts_file=""
-  dc1_hosts_file=$( cat <<-CONFIG
-# Consul DC 1 Host File Adjustments
-# Local Server/Client Hostname Resolution
-${server_ips["consul-dc1-server-0"]} consul-dc1-server-0
-${server_ips["consul-dc1-server-1"]} consul-dc1-server-1
-${server_ips["consul-dc1-server-2"]} consul-dc1-server-2
-${server_ips["consul-dc1-server-3"]} consul-dc1-server-3
-${client_ips["consul-dc1-client-0"]} consul-dc1-client-0
-${client_ips["consul-dc1-client-1"]} consul-dc1-client-1
-${server_ips["consul-dc1-mesh-gw"]} consul-dc1-mesh-gw
-# Remote Server Hostname Resolution
-${server_ips_wan["consul-dc2-server-0"]} consul-dc2-server-0
-${server_ips_wan["consul-dc2-server-1"]} consul-dc2-server-1
-${server_ips_wan["consul-dc2-server-2"]} consul-dc2-server-2
-${server_ips_wan["consul-dc2-server-3"]} consul-dc2-server-3
-${server_ips_wan["consul-dc2-mesh-gw"]} consul-dc2-mesh-gw
-CONFIG
-)
+[Install]
+WantedBy=multi-user.target
+EOF
+) | sudo tee /etc/systemd/system/consul.service
 
-  local dc2_hosts_file=""
-  dc2_hosts_file=$( cat <<-CONFIG
-# Consul DC 2 Host File Adjustments
-# Local Server/Client Hostname Resolution
-${server_ips["consul-dc2-server-0"]} consul-dc2-server-0
-${server_ips["consul-dc2-server-1"]} consul-dc2-server-1
-${server_ips["consul-dc2-server-2"]} consul-dc2-server-2
-${server_ips["consul-dc2-server-3"]} consul-dc2-server-3
-${client_ips["consul-dc2-client-0"]} consul-dc2-client-0
-${client_ips["consul-dc2-client-0"]} consul-dc2-client-1
-${server_ips["consul-dc2-mesh-gw"]} consul-dc2-mesh-gw
-# Remote Server Hostname Resolution
-${server_ips_wan["consul-dc1-server-0"]} consul-dc1-server-0
-${server_ips_wan["consul-dc1-server-1"]} consul-dc1-server-1
-${server_ips_wan["consul-dc1-server-2"]} consul-dc1-server-2
-${server_ips_wan["consul-dc1-server-3"]} consul-dc1-server-3
-${server_ips_wan["consul-dc1-mesh-gw"]} consul-dc1-mesh-gw
-CONFIG
-)
-  case "$datacenter" in
-    dc1)
-      log_info "PRIMARY (DC1): Updating /etc/hosts for name resolution..."
-      echo -e "$dc1_hosts_file" | sudo tee --append "/etc/hosts"
-      ;;
-    dc2)
-      log_info "SECONDARY (DC2): Updating /etc/hosts for name resolution..."
-      echo -e "$dc2_hosts_file" | sudo tee --append "/etc/hosts"
-      ;;
-  esac
 }
 
-function create_consul_systemd_unit {
-  # Copy Vagrant Specific Consul Unit File to /etc/systemd/system / Adjust permissions
-  sudo cp "$VAGRANT_CONSUL_DIR/daemons/consul.service" "/etc/systemd/system/consul.service"
-  sudo chmod --reference="/etc/systemd/system/default.target.wants" "/etc/systemd/system/consul.service"
-# Create temp script to reload systemd daemon loader.
-cat <<-RELOAD > /etc/consul.d/reload.sh
+function install_systemd_file() {
+  systemd_file="$1"
+  echo "[+] Installing systemd file: $systemd_file"
+  sudo cp "/vagrant/consul/systemd/$systemd_file" /etc/systemd/system
+  sudo chmod 0664 "/etc/systemd/system/$systemd_file"
+}
+
+function run_systemd_daemon_reload() {
+  # Create temp script to reload systemd daemon loader.
+  cat <<-RELOAD > /etc/consul.d/daemon-reload.sh
 #!/bin/bash
-sudo systemctl enable consul.service
 sudo systemctl daemon-reload &>/dev/null
 sleep 2
 RELOAD
-chmod +x /etc/consul.d/reload.sh
-log_info "Reloading systemd Consul config..."
-. "/etc/consul.d/reload.sh"
-sudo rm -rf "/etc/consul.d/reload.sh"
+  chmod +x /etc/consul.d/reload.sh
+  echo "[+] Reloading systemd Consul unit file..."
+  . "/etc/consul.d/daemon-reload.sh"
+  sudo rm -rf "/etc/consul.d/daemon-reload.sh"
+  echo "[+] systemctl daemon-reload successful!"
 }
 
-function start_consul {
+function start_consul() {
 # Verify consul.hcl and start consul service
 valid_cfg=$( consul validate "$CONSUL_CFG_DIR/consul.hcl" )
 if [ "$valid_cfg" == 'Configuration is valid!' ]; then
-  log_info "Valid consul.hcl Configuration! Starting Consul service...."
+  echo "Valid consul.hcl Configuration! Starting Consul service...."
   sudo systemctl start consul
 else
-  log_warn "$CONSUL_CFG_DIR/consul.hcl is INVALID!!!"
+  echo "$CONSUL_CFG_DIR/consul.hcl is INVALID!!!"
   return 1;
 fi
 }
 
-function set_consul_env_vars {
-  local -r rpc_encryption_enabled="$1"
-  local -r acls_enabled="$2"
-  local dc="$3"
+function install_utility_script() {
+  utility_script="$1"
+  utility_script_parent_dir="$2"
+  destination_filename="$utility_script"
 
-  if [[ $rpc_encryption_enabled == "true" ]]; then
-    if [[ "$acls_enabled" == "true" ]];then
-      local uuid=""
-      local -r central_bootstrap="$VAGRANT_CONSUL_DIR/acl/bootstrap"
-      uuid="$( sudo cat "$central_bootstrap")"
-      export CONSUL_HTTP_TOKEN="$uuid"
-    fi
-    export CONSUL_HTTP_ADDR="https://127.0.0.1:8501" && \
-    export CONSUL_CACERT="/etc/consul.d/tls/consul-agent-ca.pem" && \
-    export CONSUL_CLIENT_CERT="/etc/consul.d/tls/$dc-server-consul-0.pem" && \
-    export CONSUL_CLIENT_KEY="/etc/consul.d/tls/$dc-server-consul-0-key.pem"
-  else
-    export CONSUL_HTTP_ADDR="http://127.0.0.1:8500"
-  fi
+  echo "[+] Installing script $utility_script file as: $destination_filename"
+  sudo cp --verbose "/vagrant/scripts/$utility_script_parent_dir/$utility_script" "/usr/local/bin/$destination_filename"
+  sudo chown --recursive "consul:consul" "/usr/local/bin/$destination_filename"
+  sudo chmod 0755 "/usr/local/bin/$destination_filename"
 }
 
-function install {
+function configure_agent() {
   local version="$CONSUL_VERSION"
-  local datacenter="$CONSUL_DEFAULT_DC"
-  local user="$CONSUL_USERNAME"
-  local envoy_version="$ENVOY_DEFAULT_VERSION"
-  local is_cert_authority=""
-  local set_rpc_encryption=""
+  local enable_consul_ui=""
   local new_gossip_key=""
   local set_gossip_encryption=""
   local enable_consul_connect=""
   local bootstrap_acls=""
   local enable_acls=""
-  local enable_mesh_gw=""
 
   while [[ $# -gt 0 ]]; do
     local key="$1"
 
     case "$key" in
-      --version)
-        assert_not_empty "$key" "$2"
-        version="$2"
-        shift
-        ;;
-      --datacenter)
-        assert_not_empty "$key" "$2"
-        datacenter="$2"
-        shift
+      --enable-consul-ui)
+        enable_consul_ui="true"
         ;;
       --enable-consul-connect)
         enable_consul_connect="true"
-        ;;
-      --envoy-version)
-        assert_not_empty "$key" "$2"
-        envoy_version="$2"
-        shift
-        ;;
-      --certificate-authority)
-        is_cert_authority="true"
-        ;;
-      --set-rpc-encryption)
-        set_rpc_encryption="true"
         ;;
       --update-gossip-key)
         new_gossip_key="true"
@@ -819,15 +346,12 @@ function install {
       --enable-acls)
         enable_acls="true"
         ;;
-      --enable-mesh-gw)
-        enable_mesh_gw="true"
-        ;;
       --help)
         print_usage
         exit
         ;;
       *)
-        log_error "Unrecognized argument: $key"
+        echo "Unrecognized argument: $key"
         print_usage
         exit 1
         ;;
@@ -836,48 +360,35 @@ function install {
     shift
   done
 
-  assert_not_empty "--version" "$version"
-  [[ ("$enable_consul_connect" == "true" ) ]] && assert_not_empty "--envoy-version" "$envoy_version"
+  if [[ ("$HOSTNAME" == consul-$DATACENTER-server-*) ]];then update_bootstrap_expect; fi
 
-  log_info "[+] Starting Consul install"
-  install_dependencies
-  create_consul_user "$user"
-  create_consul_install_paths "$user"
-  fetch_binary "$version"
-  install_binary "$user" "$datacenter"
-  create_consul_systemd_unit
-  update_hosts_file "$datacenter"
+  [[ "$enable_consul_ui" == "true" ]] && enable_consul_ui "$CONSUL_VERSION"
 
-  [[ "$new_gossip_key" == "true" ]] && run_consul_keygen "$CONSUL_KEYGEN_OUT" "$datacenter"
+  [[ "$new_gossip_key" == "true" ]] && run_consul_keygen
 
-  [[ "$set_gossip_encryption" == "true" ]] && enable_gossip_encryption "$CONSUL_KEYGEN_OUT"
+  [[ "$set_gossip_encryption" == "true" ]] && enable_gossip_encryption
 
   [[ ("$bootstrap_acls" == "true") ]] && generate_bootstrap_token
 
-  [[ ("$enable_acls" == "true") ]] && enable_acls "$version" "$datacenter"
+  [[ ("$enable_acls" == "true") ]] && enable_acls "$CONSUL_VERSION" "$DATACENTER"
 
-  [[ ("$is_cert_authority" == "true") ]] && create_tls_certificates "$datacenter"
-
-  [[ ("$set_rpc_encryption" == "true") ]] && set_tls_encryption "$user" "$datacenter"
-
-  [[ ("$enable_consul_connect" == "true") ]] && enable_consul_connect "$datacenter"
-
-  [[ ("$enable_consul_connect" == "true") ]] && install_envoy "$envoy_version"
-
-  [[ ("$enable_mesh_gw" == "true") ]] && install_envoy "$envoy_version"
-
-  # This command is run with sudo rights so that it will succeed in cases where image hardening alters the permissions
-  # on the directories where Consul may be installed. See https://github.com/hashicorp/terraform-aws-consul/issues/210.
-  if sudo -E PATH="$PATH" bash -c "command -v consul"; then
-    log_info "[+] Consul install complete!";
-    start_consul && sleep 1
-    set_consul_env_vars "$set_rpc_encryption" "$enable_acls" "$datacenter"
-    consul members
-    exit 0;
-  else
-    log_info "[-] Could not find consul command. Aborting."
-    exit 1;
-  fi
+  [[ ("$enable_consul_connect" == "true") ]] && enable_consul_connect
 }
 
-install "$@"
+create_consul_user 'consul'
+setup_directories "$DATACENTER"
+install_consul
+bootstrap_consul_systemd_unit "$DATACENTER"
+install_consul_template
+install_systemd_file consul-template.service
+install_envoy "$ENVOY_VERSION"
+install_utility_script upgrade-consul upgrade-consul
+install_utility_script bootstrap-envoy-mesh-gw envoy-mesh-gw
+install_utility_script kv-put-get.sh stress-testing
+install_utility_script services.sh stress-testing
+sudo systemctl enable --now consul.service
+sudo systemctl enable --now consul-template.service
+run_systemd_daemon_reload
+configure_agent "$@"
+if sudo -E PATH="$PATH" bash -c "command -v consul"; then echo "[+] Consul install complete!" && start_consul && exit 0;
+else echo "[-] Could not find consul command. Aborting." && exit 1; fi

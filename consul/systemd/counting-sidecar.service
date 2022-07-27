@@ -1,0 +1,21 @@
+[Unit]
+Description="HashiCorp Consul - A service mesh solution"
+Documentation=https://www.consul.io/
+Requires=network-online.target
+After=network-online.target
+Wants=consul.service counting.service
+ConditionFileNotEmpty=/etc/consul.d/consul.hcl
+
+[Service]
+Type=notify
+User=vagrant
+Group=vagrant
+ExecStart=/usr/local/bin/consul connect envoy -sidecar-for counting-1 -admin-bind localhost:19001 -address "{{ GetInterfaceIP \"eth1\" }}:21003"
+ExecReload=/bin/kill --signal HUP $MAINPID
+KillMode=process
+KillSignal=SIGTERM
+Restart=on-failure
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

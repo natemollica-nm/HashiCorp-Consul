@@ -1,0 +1,109 @@
+#!/bin/bash
+
+DATACENTER="${DATACENTER:=dc1}"
+LAN_IP_PREFIX_DC1="10.0.0"
+LAN_IP_PREFIX_DC2="20.0.0"
+WAN_IP_PREFIX="192.169.7"
+
+declare -A server_ips=(
+  ["consul-dc1-server-0"]="$LAN_IP_PREFIX_DC1.10"
+  ["consul-dc1-server-1"]="$LAN_IP_PREFIX_DC1.11"
+  ["consul-dc1-server-2"]="$LAN_IP_PREFIX_DC1.12"
+  ["consul-dc1-server-3"]="$LAN_IP_PREFIX_DC1.13"
+  ["consul-dc1-server-4"]="$LAN_IP_PREFIX_DC1.14"
+  ["consul-dc2-server-0"]="$LAN_IP_PREFIX_DC2.20"
+  ["consul-dc2-server-1"]="$LAN_IP_PREFIX_DC2.21"
+  ["consul-dc2-server-2"]="$LAN_IP_PREFIX_DC2.22"
+  ["consul-dc2-server-3"]="$LAN_IP_PREFIX_DC2.23"
+  ["consul-dc2-server-4"]="$LAN_IP_PREFIX_DC2.24"
+)
+declare -A server_ips_wan=(
+  ["consul-dc1-server-0"]="$WAN_IP_PREFIX.10"
+  ["consul-dc1-server-1"]="$WAN_IP_PREFIX.11"
+  ["consul-dc1-server-2"]="$WAN_IP_PREFIX.12"
+  ["consul-dc1-server-3"]="$WAN_IP_PREFIX.13"
+  ["consul-dc1-server-4"]="$WAN_IP_PREFIX.14"
+  ["consul-dc2-server-0"]="$WAN_IP_PREFIX.20"
+  ["consul-dc2-server-1"]="$WAN_IP_PREFIX.21"
+  ["consul-dc2-server-2"]="$WAN_IP_PREFIX.22"
+  ["consul-dc2-server-3"]="$WAN_IP_PREFIX.23"
+  ["consul-dc2-server-4"]="$WAN_IP_PREFIX.24"
+)
+declare -A client_ips=(
+  ["consul-dc1-client-0"]="$LAN_IP_PREFIX_DC1.101"
+  ["consul-dc1-client-1"]="$LAN_IP_PREFIX_DC1.111"
+  ["consul-dc1-client-2"]="$LAN_IP_PREFIX_DC1.121"
+  ["consul-dc2-client-0"]="$LAN_IP_PREFIX_DC2.201"
+  ["consul-dc2-client-1"]="$LAN_IP_PREFIX_DC2.211"
+  ["consul-dc2-client-2"]="$LAN_IP_PREFIX_DC1.221"
+)
+declare -A client_ips_wan=(
+  ["consul-dc1-client-0"]="$WAN_IP_PREFIX.101"
+  ["consul-dc1-client-1"]="$WAN_IP_PREFIX.111"
+  ["consul-dc1-client-1"]="$WAN_IP_PREFIX.121"
+  ["consul-dc2-client-0"]="$WAN_IP_PREFIX.201"
+  ["consul-dc2-client-1"]="$WAN_IP_PREFIX.211"
+  ["consul-dc2-client-2"]="$WAN_IP_PREFIX.221"
+)
+
+function update_hosts_file {
+  local -r datacenter="$1"
+
+  local dc1_hosts_file=""
+  dc1_hosts_file=$( cat <<-CONFIG
+# Consul DC 1 Host File Adjustments
+# Local Server/Client Hostname Resolution
+${server_ips["consul-dc1-server-0"]} consul-dc1-server-0
+${server_ips["consul-dc1-server-1"]} consul-dc1-server-1
+${server_ips["consul-dc1-server-2"]} consul-dc1-server-2
+${server_ips["consul-dc1-server-3"]} consul-dc1-server-3
+${server_ips["consul-dc1-server-4"]} consul-dc1-server-4
+${client_ips["consul-dc1-client-0"]} consul-dc1-client-0
+${client_ips["consul-dc1-client-1"]} consul-dc1-client-1
+${client_ips_wan["consul-dc1-client-0"]} consul-dc1-client-0
+${client_ips_wan["consul-dc1-client-1"]} consul-dc1-client-1
+# Remote Server Hostname Resolution
+${server_ips_wan["consul-dc2-server-0"]} consul-dc2-server-0
+${server_ips_wan["consul-dc2-server-1"]} consul-dc2-server-1
+${server_ips_wan["consul-dc2-server-2"]} consul-dc2-server-2
+${server_ips_wan["consul-dc2-server-3"]} consul-dc2-server-3
+${server_ips_wan["consul-dc2-server-4"]} consul-dc2-server-4
+${client_ips_wan["consul-dc2-client-0"]} consul-dc2-client-0
+${client_ips_wan["consul-dc2-client-1"]} consul-dc2-client-1
+CONFIG
+)
+
+  local dc2_hosts_file=""
+  dc2_hosts_file=$( cat <<-CONFIG
+# Consul DC 2 Host File Adjustments
+# Local Server/Client Hostname Resolution
+${server_ips["consul-dc2-server-0"]} consul-dc2-server-0
+${server_ips["consul-dc2-server-1"]} consul-dc2-server-1
+${server_ips["consul-dc2-server-2"]} consul-dc2-server-2
+${server_ips["consul-dc2-server-3"]} consul-dc2-server-3
+${server_ips["consul-dc2-server-4"]} consul-dc2-server-4
+${client_ips["consul-dc2-client-0"]} consul-dc2-client-0
+${client_ips["consul-dc2-client-0"]} consul-dc2-client-1
+# Remote Server Hostname Resolution
+${server_ips_wan["consul-dc1-server-0"]} consul-dc1-server-0
+${server_ips_wan["consul-dc1-server-1"]} consul-dc1-server-1
+${server_ips_wan["consul-dc1-server-2"]} consul-dc1-server-2
+${server_ips_wan["consul-dc1-server-3"]} consul-dc1-server-3
+${server_ips_wan["consul-dc1-server-4"]} consul-dc1-server-4
+${client_ips_wan["consul-dc1-client-0"]} consul-dc1-client-0
+${client_ips_wan["consul-dc1-client-1"]} consul-dc1-client-1
+CONFIG
+)
+  case "$datacenter" in
+    dc1)
+      echo "PRIMARY (DC1): Updating /etc/hosts for name resolution..."
+      echo -e "$dc1_hosts_file" | sudo tee --append "/etc/hosts"
+      ;;
+    dc2)
+      echo "SECONDARY (DC2): Updating /etc/hosts for name resolution..."
+      echo -e "$dc2_hosts_file" | sudo tee --append "/etc/hosts"
+      ;;
+  esac
+}
+
+update_hosts_file "$DATACENTER"

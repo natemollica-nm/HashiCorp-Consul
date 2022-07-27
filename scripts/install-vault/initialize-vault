@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+# IP="${IP:=dc1}"
+#eht1_ip=""
+bootstrap_token=""
+
+function get_host_ip() {
+  eth_adapter="$1"
+  if [[ ($eth_adapter == null) || ($eth_adapter == "") ]];then  eth_adapter="eth1"; fi
+  ip -4 addr show "$eth_adapter" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
+}
+
+function run_systemd_daemon_reload() {
+  # Create temp script to reload systemd daemon loader.
+  cat <<-RELOAD > /etc/vault.d/daemon-reload.sh
+#!/bin/bash
+sudo systemctl daemon-reload &>/dev/null
+sleep 2
+RELOAD
+  chmod +x /etc/vault.d/reload.sh
+  echo "[+] Reloading systemd Vault unit file..."
+  . "/etc/vault.d/daemon-reload.sh"
+  sudo rm -rf "/etc/vault.d/daemon-reload.sh"
+  echo "[+] systemctl daemon-reload successful!"
+}
+
+sudo chown root:root /opt/vault/tls --recursive
+sudo chown root:vault /opt/vault/tls/*key*
+sudo chmod 0644 /opt/vault/tls --recursive
+sudo chmod 0640 /opt/vault/tls/*key*
+bootstrap_token="$(sudo cat "/vagrant/consul/acl/bootstrap")"
+# eth1_ip="$( get_host_ip "eth1" )"
+
+if [[ (-f "/usr/lib/systemd/system/vault.service") ]];then sudo rm -rf "/usr/lib/systemd/system/vault.service"; fi
+sudo touch "/usr/lib/systemd/system/vault.service"
+
+(
+cat <<-EOF
+# Full configuration options can be found at https://www.vaultproject.io/docs/configuration
+ui = true
+
+#mlock = true
+#disable_mlock = true
+
+storage "consul" {
+  address       = "http://127.0.0.1:8500"
+  path          = "vault/"
+  token         = $bootstrap_token
+}
+
+api_addr = "http://0.0.0.0:8200"
+cluster_addr = "https://127.0.0.1:8201"
+plugin_directory = "/etc/vault.d/vault_plugins"
+
+# HTTP listener
+listener "tcp" {
+ address     = "0.0.0.0:8200"
+ tls_disable = "true"
+}
+
+# HTTPS listener
+# listener "tcp" {
+#  address            = "0.0.0.0:8200"
+#  tls_cert_file      = "/opt/vault/tls/tls.crt"
+#  tls_key_file       = "/opt/vault/tls/tls.key"
+#  tls_client_ca_file = "/opt/vault/tls/tls.crt"
+# }
+
+service_registration "consul" {
+  service      = "vault"
+  address      = "127.0.0.1:8500"
+  token        = $bootstrap_token
+  service_tags = "vault_server_service"
+}
+
+# Enterprise license_path
+# This will be required for enterprise as of v1.8
+license_path = "/vagrant/vault/enterprise-license/vault.hclic"
+EOF
+) | sudo tee /etc/vault.d/vault.hcl
+
+echo "Enabling Vault service from /usr/lib/systemd/system/vault.service"
+# sudo chmod 0664 "/usr/lib/systemd/system/vault.service"
+/bin/sh -c 'sudo systemctl unmask vault.service'
+sudo systemctl enable vault.service
+echo "Reloading Linux daemons...."
+run_systemd_daemon_reload
+echo "Starting Vault service...."
+sudo systemctl start vault && sleep 2
+
+echo "Initializing and Unsealing Vault..."
+export VAULT_ADDR="http://127.0.0.1:8200"
+vault operator init \
+  -key-shares=1 \
+  -key-threshold=1 \
+  -format=json | sudo tee /opt/vault/vault-keys.json
+
+sudo /bin/sh -c 'vault operator unseal "$( jq -r '.unseal_keys_hex[0]' /opt/vault/vault-keys.json )"'
+echo
+
+root_token=$(jq -r '.root_token' /opt/vault/vault-keys.json)
+export VAULT_TOKEN="$root_token"
+echo "Your Vault root token is:"
+echo
+echo "$root_token"
+echo
+
+echo "Waiting for Vault to be healthy..."
+resp_code=""
+retries=0
+until [[ ("${resp_code}" = "200") || ($retries == 20) ]]; do
+  sleep 2
+  resp_code="$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8200/v1/sys/health)"
+  retries=$(( retries + 1 ));
+done
+
+echo "Setting Vault Environmental Vars --> /etc/vault.d/vault.env"
+(
+cat <<-VAULT_ENV
+export VAULT_ADDR="http://127.0.0.1:8200"
+export VAULT_TOKEN="$root_token"
+VAULT_ENV
+) | sudo tee /etc/vault.d/vault.env
+
+echo "[+] Vault server initialization complete!"
+

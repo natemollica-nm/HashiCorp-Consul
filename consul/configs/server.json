@@ -1,0 +1,26 @@
+{
+  "ui": true,
+  "data_dir": "/opt/consul/data",
+  "log_level": "DEBUG",
+  "server": true,
+  "bootstrap_expect": 3,
+  "client_addr": "0.0.0.0",
+  "advertise_addr": "{{ GetInterfaceIP `eth1` }}",
+  "leave_on_terminate": true,
+  "ports": {
+    "dns": 8600,
+    "http": -1,
+    "https": 8501,
+    "serf_lan": 8301,
+    "serf_wan": 8302,
+    "server": 8300
+  },
+  "verify_incoming": true,
+  "verify_outgoing": true,
+  "verify_server_hostname": true,
+  "ca_file": "/etc/consul.d/tls/consul-agent-ca.pem",
+  "cert_file": "/etc/consul.d/tls/dc1-server-consul-0.pem",
+  "key_file": "/etc/consul.d/tls/dc1-server-consul-0-key.pem",
+  "encrypt": "tr9UtPFKA05ApzpfXR2Ht8/JYRFzUEAfNO8Xa4eMRS4=",
+  "license_path": "/vagrant/consul/enterpise-license/consul-legacy.hclic"
+}

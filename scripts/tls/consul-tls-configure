@@ -1,0 +1,334 @@
+#!/bin/bash
+CONSUL_VERSION="${CONSUL_VERSION:=1.12.2+ent}"
+DATACENTER="${DATACENTER:=dc1}"
+
+function get_host_ip() {
+  eth_adapter="$1"
+  if [[ ($eth_adapter == null) || ($eth_adapter == "") ]];then  eth_adapter="eth1"; fi
+  ip -4 addr show "$eth_adapter" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
+}
+
+function version_gt() {
+  test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
+}
+
+function update_consul_hcl() {
+  local config_update="$1"
+  local -r update_title="$2"
+  local -r consul_hcl_path="/etc/consul.d/consul.hcl"
+
+  echo "CONFIG UPDATE: $update_title ------> $consul_hcl_path"
+  echo -ne "\n" | sudo tee --append "$consul_hcl_path"
+  echo -e "$config_update" | sudo tee --append "$consul_hcl_path"
+}
+
+function create_cluster_cert() {
+  local -r node_name="$1"
+  local -r srvr_or_clnt_or_cli="$2"
+  local -r dc="$3"
+  local eth0_ip="10.0.2.15"
+  local eth1_ip=""
+  local vagrant_home_ip="127.0.2.1"
+  local envoy_grpc_ip="192.0.2.2"
+  eth1_ip="$( get_host_ip "eth1" )"
+
+  if [[ "$srvr_or_clnt_or_cli" == "server" ]]; then
+    consul tls cert create -server -node "$node_name" -dc="$dc" \
+      -additional-dnsname="*.server.dc1.consul" -additional-dnsname="*.server.dc2.consul" \
+      -additional-dnsname="*.dc1.consul" -additional-dnsname="*.dc2.consul" \
+      -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$eth0_ip" \
+      -additional-ipaddress="$eth1_ip" -additional-ipaddress="$envoy_grpc_ip" -additional-ipaddress="10.0.2.2" \
+      && sleep 1
+  fi
+  if [[ "$srvr_or_clnt_or_cli" == "client" ]]; then
+  consul tls cert create -client -dc="$dc" \
+    -additional-dnsname="*.dc1.consul" -additional-dnsname="*.dc2.consul" -additional-dnsname="" \
+    -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$eth0_ip" \
+    -additional-ipaddress="$eth1_ip" -additional-ipaddress="$envoy_grpc_ip" -additional-ipaddress="10.0.2.2" \
+    && sleep 1
+  fi
+  if [[ "$srvr_or_clnt_or_cli" == "cli" ]]; then
+  consul tls cert create -cli --dc="$dc" \
+    -additional-dnsname="*.server.dc1.consul" -additional-dnsname="*.server.dc2.consul" \
+    -additional-dnsname="*.dc1.consul" -additional-dnsname="*.dc2.consul" \
+    -additional-ipaddress="$vagrant_home_ip" -additional-ipaddress="$eth0_ip" \
+    -additional-ipaddress="$eth1_ip" -additional-ipaddress="$envoy_grpc_ip" -additional-ipaddress="10.0.2.2" \
+    && sleep 1
+  fi
+}
+
+function create_tls_certificates() {
+  local -r datacenter="$1"
+  local datacenter_secondary=""
+  [[ "$datacenter" == "dc1" ]] && datacenter_secondary="dc2"
+  [[ "$datacenter" == "dc2" ]] && datacenter_secondary="dc1"
+
+  local -r ca_public_cert="consul-agent-ca.pem"
+  local -r ca_private_cert="consul-agent-ca-key.pem"
+  local -r consul_srvr_pub_cert="$datacenter-server-consul-0.pem"
+  local -r consul_srvr_private_cert="$datacenter-server-consul-0-key.pem"
+  local -r consul_srvr_pub_cert_sec="$datacenter_secondary-server-consul-0.pem"
+  local -r consul_srvr_private_cert_sec="$datacenter_secondary-server-consul-0-key.pem"
+  local -r consul_clnt_pub_cert="$datacenter-client-consul-0.pem"
+  local -r consul_clnt_private_cert="$datacenter-client-consul-0-key.pem"
+  local -r consul_clnt_pub_cert_sec="$datacenter_secondary-client-consul-0.pem"
+  local -r consul_clnt_private_cert_sec="$datacenter_secondary-client-consul-0-key.pem"
+  local -r consul_https_cli_pub_key="$datacenter-cli-consul-0.pem"
+  local -r consul_https_cli_private_key="$datacenter-cli-consul-0-key.pem"
+  local -r consul_https_cli_pub_key_sec="$datacenter_secondary-cli-consul-0.pem"
+  local -r consul_https_cli_private_key_sec="$datacenter_secondary-cli-consul-0-key.pem"
+
+  echo "[+] Initializing Consul Certificate Authority: $HOSTNAME"
+  consul tls ca create && sleep 3
+  [[ -f $ca_public_cert ]] || echo "Failed to create $ca_public_cert"
+  [[ -f $ca_private_cert ]] || echo "Failed to create $ca_private_cert"
+
+  echo "[+] Primary DC --> Creating Consul Server certs (DC: $datacenter)"
+  create_cluster_cert "$HOSTNAME" "server" "$datacenter"
+  [[ -f $consul_srvr_pub_cert ]] || echo "Failed to create $consul_srvr_pub_cert"
+  [[ -f $consul_srvr_private_cert ]] || echo "Failed to create $consul_srvr_private_cert"
+
+  echo "[+] Secondary DC --> Creating Consul Server certs - (DC: $datacenter_secondary)"
+  create_cluster_cert "$HOSTNAME" "server" "$datacenter_secondary"
+  [[ -f $consul_srvr_pub_cert_sec ]] || echo "Failed to create $consul_srvr_pub_cert_sec"
+  [[ -f $consul_srvr_private_cert_sec ]] || echo "Failed to create $consul_srvr_private_cert_sec"
+
+  echo "[+] Primary DC --> Creating Consul Client certs (DC: $datacenter)"
+  create_cluster_cert "" "client" "$datacenter"
+  [[ -f $consul_clnt_pub_cert ]] || echo "Failed to create $consul_clnt_pub_cert"
+  [[ -f $consul_clnt_private_cert ]] || echo "Failed to create $consul_clnt_private_cert"
+
+  echo "[+] Secondary DC --> Creating Consul Client certs - (DC: $datacenter_secondary)"
+  create_cluster_cert "" "client" "$datacenter_secondary"
+  [[ -f $consul_clnt_pub_cert_sec ]] || echo "Failed to create $consul_clnt_pub_cert_sec"
+  [[ -f $consul_clnt_private_cert_sec ]] || echo "Failed to create $consul_clnt_private_cert_sec"
+
+  echo "[+] Primary DC --> Creating Consul CLI certs - (DC: $datacenter)"
+  create_cluster_cert "" "cli" "$datacenter"
+  [[ -f $consul_https_cli_pub_key ]] || echo "Failed to create $consul_https_cli_pub_key"
+  [[ -f $consul_https_cli_private_key ]] || echo "Failed to create $consul_https_cli_private_key"
+
+  echo "[+] Secondary DC --> Creating Consul CLI certs - (DC: $datacenter_secondary)"
+  create_cluster_cert "" "cli" "$datacenter_secondary"
+  [[ -f $consul_https_cli_pub_key_sec ]] || echo "Failed to create $consul_https_cli_pub_key_sec"
+  [[ -f $consul_https_cli_private_key_sec ]] || echo "Failed to create $consul_https_cli_private_key_sec"
+
+  echo "Copying Consul TLS Certs to /vagrant/consul/tls"
+  sudo chmod 0755 ./*.pem && \
+  sudo rm -rf /vagrant/consul/tls/* && \
+  sudo cp ./*.pem /vagrant/consul/tls/ && \
+  sudo rm -rf ./*.pem
+}
+
+function configure_consul_agent_tls() {
+  local dc="${1}"
+  local svr_clnt="${2}"
+  local tls_config=""
+  local svr_clnt_cfg=""
+
+if [[ ("$svr_clnt" == "client") ]]; then
+  svr_clnt_cfg=$( cat <<-CLIENT
+
+ca_file = "/etc/consul.d/tls/consul-agent-ca.pem"
+
+auto_encrypt {
+  tls = true
+}
+CLIENT
+);
+elif [[ "$svr_clnt" == "server" ]]; then
+  svr_clnt_cfg=$( cat <<-SERVER
+
+ca_file = "/etc/consul.d/tls/consul-agent-ca.pem"
+cert_file = "/etc/consul.d/tls/$dc-$svr_clnt-consul-0.pem"
+key_file = "/etc/consul.d/tls/$dc-$svr_clnt-consul-0-key.pem"
+
+auto_encrypt {
+  allow_tls = true
+  dns_san = ["*.dc1.consul", "*.dc2.consul"]
+  ip_san = [
+    "10.0.0.101",
+    "10.0.0.111",
+    "20.0.0.121",
+    "20.0.0.131",
+    "192.169.7.201",
+    "192.169.7.211",
+    "192.169.7.221",
+    "192.169.7.232"
+  ]
+}
+SERVER
+);
+fi
+
+tls_config=$( cat <<-CONFIG
+
+verify_incoming = false
+verify_incoming_rpc = true
+verify_outgoing = true
+verify_server_hostname = true
+${svr_clnt_cfg}
+CONFIG
+);
+  update_consul_hcl "$tls_config" "[+] TLS Agent Configuration"
+}
+
+function configure_consul_agent_tls_new() {
+  local dc="$1"
+  local -r svr_clnt="$2"
+  local svr_clnt_cfg=""
+
+if [[ "$svr_clnt" == "client" ]]; then
+  svr_clnt_cfg=$( cat <<-CONFIG
+
+tls {
+  defaults {
+    ca_file         = "/etc/consul.d/tls/consul-agent-ca.pem"
+    tls_min_version = "TLSv1_2" #Default
+    verify_incoming = false
+    verify_outgoing = true
+  }
+  internal_rpc {
+    verify_server_hostname = true
+  }
+}
+
+auto_encrypt {
+  tls = true
+}
+CONFIG
+);
+elif [[ "$svr_clnt" == "server" ]]; then
+  svr_clnt_cfg=$( cat <<-CONFIG
+
+tls {
+  defaults {
+    ca_file         = "/etc/consul.d/tls/consul-agent-ca.pem"
+    cert_file       = "/etc/consul.d/tls/$dc-server-consul-0.pem"
+    key_file        = "/etc/consul.d/tls/$dc-server-consul-0-key.pem"
+    tls_min_version = "TLSv1_2" #Default
+    verify_incoming = true
+    verify_outgoing = true
+  }
+  grpc {
+    ca_file         = "/etc/consul.d/tls/consul-agent-ca.pem"
+    cert_file       = "/etc/consul.d/tls/$dc-server-consul-0.pem"
+    key_file        = "/etc/consul.d/tls/$dc-server-consul-0-key.pem"
+    tls_min_version = "TLSv1_2" #Default
+    verify_incoming = true
+  }
+  https {
+    ca_file         = "/etc/consul.d/tls/consul-agent-ca.pem"
+    cert_file       = "/etc/consul.d/tls/$dc-server-consul-0.pem"
+    key_file        = "/etc/consul.d/tls/$dc-server-consul-0-key.pem"
+    tls_min_version = "TLSv1_2" #Default
+    verify_incoming = true
+    verify_outgoing = true
+  }
+  internal_rpc {
+    ca_file         = "/etc/consul.d/tls/consul-agent-ca.pem"
+    cert_file       = "/etc/consul.d/tls/$dc-server-consul-0.pem"
+    key_file        = "/etc/consul.d/tls/$dc-server-consul-0-key.pem"
+    tls_min_version = "TLSv1_2" #Default
+    verify_incoming = true
+    verify_outgoing = true
+    verify_server_hostname = true
+  }
+  server_name = "$HOSTNAME" # Can be overridden to not be the node_name for the TLS Certificate
+}
+auto_encrypt {
+  allow_tls = true
+  dns_san = ["*.dc1.consul", "*.dc2.consul"]
+  ip_san = [
+    "10.0.0.101",
+    "10.0.0.111",
+    "20.0.0.121",
+    "20.0.0.131",
+    "192.169.7.201",
+    "192.169.7.211",
+    "192.169.7.221",
+    "192.169.7.232"
+  ]
+}
+CONFIG
+);
+fi
+  update_consul_hcl "$svr_clnt_cfg" "[+] TLS Agent Configuration"
+}
+
+function set_tls_encryption() {
+  local -r dc="$1"
+  local consul_ver="$2"
+  local datacenter_secondary=""
+  local svr_clnt=""
+
+  [[ "$dc" == "dc1" ]] && datacenter_secondary="dc2"
+  [[ "$dc" == "dc2" ]] && datacenter_secondary="dc1"
+  if [[ ("$HOSTNAME" == consul-$dc-server-*) ]]; then
+    echo "[+] Server agent detected."
+    svr_clnt="server"
+  else
+    echo "[+] Client agent detected."
+    svr_clnt="client"
+  fi
+
+  echo "[+] Copying TLS certs: /vagrant/consul/tls --> /etc/consul.d/tls."
+  sudo cp /vagrant/consul/tls/consul-agent-ca.pem "/etc/consul.d/tls"
+  if [[ ("$HOSTNAME" == consul-$dc-server-0) ]]; then sudo cp /vagrant/consul/tls/consul-agent-ca-key.pem "/etc/consul.d/tls"; fi
+  sudo cp /vagrant/consul/tls/$dc-$svr_clnt-*.pem "/etc/consul.d/tls" && \
+  sudo chown --recursive "consul:consul" "/etc/consul.d/tls" && \
+  sudo chmod 0755 /etc/consul.d/tls/*
+
+  if [[ $( version_gt "1.12.0" "$consul_ver" ) ]]; then
+    echo "[+] Consul >= 1.12.0 -- Using latest TLS Stanza"
+    configure_consul_agent_tls_new "$dc" "$svr_clnt"
+  else
+    echo "[+] Consul < 1.12.0 -- Using legacy TLS Stanza"
+    configure_consul_agent_tls "$dc" "$svr_clnt"
+  fi
+}
+
+function configure_agent_tls() {
+  local datacenter="$DATACENTER"
+  local is_cert_authority=""
+  local set_rpc_encryption=""
+
+  while [[ $# -gt 0 ]]; do
+    local key="$1"
+
+    case "$key" in
+      --cert-authority-init)
+        echo "[+] Setting $HOSTNAME as Consul RPC TLS Certificate Authority"
+        is_cert_authority="true"
+        ;;
+      --set-rpc-encryption)
+        set_rpc_encryption="true"
+        ;;
+      --help)
+        print_usage
+        exit
+        ;;
+      *)
+        echo "Unrecognized argument: $key"
+        print_usage
+        exit 1
+        ;;
+    esac
+
+    shift
+  done
+
+
+  [[ ("$is_cert_authority" == "true") ]] && create_tls_certificates "$DATACENTER"
+
+  echo "[+] Configuring $HOSTNAME Consul RPC Encryption -- Copying certs/enabling agent"
+  [[ ("$set_rpc_encryption" == "true") ]] && set_tls_encryption "$DATACENTER" "$CONSUL_VERSION"
+
+}
+
+configure_agent_tls "$@"
+echo "[+] Stopping Consul service via systemd..."
+sudo service consul stop
+echo "[+] Starting Consul service via systemd..."
+sudo service consul start
+echo "***** Consul Agent TLS Configuration Complete!"
